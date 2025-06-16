@@ -380,20 +380,20 @@ public class JavaFXGUI implements GUIConnector {
         });
     }
 
-    @Override
-    public void highlightGameCells(List<Object> coordinates) {
-        Platform.runLater(() -> {
-            // TODO: Implement highlighting logic. Requires Coordinate class/record
-            // Example: Iterate through coordinates, find cell Node, apply style
-            // clearCellHighlights(); // Optional: clear previous before applying new
-            // for (Object coordObj : coordinates) {
-            // Coordinate coord = (Coordinate) coordObj; // Cast to your Coordinate type
-            // Node cellNode = getNodeByRowColumnIndex(coord.r() + 1, coord.c() + 1, boardGrid);
-            // if (cellNode != null) cellNode.setStyle("-fx-background-color: yellow; -fx-border-color: orange; -fx-border-width: 2px;");
-            // }
-            System.out.println("GUI: Highlighting cells: " + coordinates);
-        });
-    }
+//    @Override
+//    public void highlightGameCells(List<Object> coordinates) {
+//        Platform.runLater(() -> {
+//            // TODO: Implement highlighting logic. Requires Coordinate class/record
+//            // Example: Iterate through coordinates, find cell Node, apply style
+//            // clearCellHighlights(); // Optional: clear previous before applying new
+//            // for (Object coordObj : coordinates) {
+//            // Coordinate coord = (Coordinate) coordObj; // Cast to your Coordinate type
+//            // Node cellNode = getNodeByRowColumnIndex(coord.r() + 1, coord.c() + 1, boardGrid);
+//            // if (cellNode != null) cellNode.setStyle("-fx-background-color: yellow; -fx-border-color: orange; -fx-border-width: 2px;");
+//            // }
+//            System.out.println("GUI: Highlighting cells: " + coordinates);
+//        });
+//    }
 
     @Override
     public void clearCellHighlights() {

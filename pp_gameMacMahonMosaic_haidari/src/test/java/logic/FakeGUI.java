@@ -35,10 +35,10 @@ public class FakeGUI implements GUIConnector{
          System.out.println("FakeGUI: showGameEndMessage: Title='" + title + "', Message='" + message + "'");
     }
 
-    @Override
-    public void highlightGameCells(List<Object> coordinates) {
-         System.out.println("FakeGUI: highlightGameCells called for coordinates: " + coordinates);
-    }
+//    @Override
+//    public void highlightGameCells(List<Object> coordinates) {
+//         System.out.println("FakeGUI: highlightGameCells called for coordinates: " + coordinates);
+//    }
 
     @Override
     public void clearCellHighlights() {
@@ -69,5 +69,11 @@ public class FakeGUI implements GUIConnector{
     public void enableRotationButton(boolean enable) {
          System.out.println("FakeGUI: enableRotationButton called with: " + enable);
 
+    }
+
+    @Override
+    public void highlightCell(int row, int column, String colorPattern) {
+            System.out.println("FakeGUI: highlightCell called for cell (" + row + "," + column +
+                    ") with color pattern: " + colorPattern);
     }
 }

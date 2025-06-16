@@ -30,8 +30,7 @@ public interface GUIConnector {
 
     /**
      * Updates the visual representation of available pieces.
-     *
-//     * @param availablePieceImages A list of paths or identifiers for the images of available pieces.
+     * @param pieceRepresentationForGUI A list of paths or identifiers for the images of available pieces.
      * Each string could also be a more complex representation if needed.
      */
     void displayAvailablePieces(List<String> pieceRepresentationForGUI);
@@ -50,12 +49,6 @@ public interface GUIConnector {
      * @param message The detailed message (e.g., "You solved the puzzle!").
      */
     void showGameEndMessage(String title, String message);
-
-    /**
-     * Highlights a list of game cells, e.g., to show conflicts or a solution path.
-     * @param coordinates List of (row, col) of game cells to highlight.
-     */
-    void highlightGameCells(List<Object /*Coordinate*/> coordinates); // Use a simple Coordinate record/class in logic
 
     /**
      * Clears any currently highlighted cells.
@@ -90,9 +83,9 @@ public interface GUIConnector {
      */
     void setEditorMode(boolean isEditorMode);
 
-    /**
-     *
-     * @param enable
+    /** Enables or disables the rotation button in the GUI.
+     * This is useful for both during the game and editor mode where rotation might be necessary.
+     * @param enable true to enable the rotation button, false to disable it.
      */
     void enableRotationButton(boolean enable);
 
