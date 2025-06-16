@@ -1,16 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
 
-<?import javafx.scene.control.Button?>
-<VBox alignment="CENTER" spacing="20.0" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="gui.UserInterfaceController">
-    <padding>
-        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0"/>
-    </padding>
+<BorderPane prefHeight="700.0" prefWidth="900.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="gui.UserInterfaceController">
 
-    <Label fx:id="welcomeText"/>
-    <Button text="Hello!" onAction="#onHelloButtonClick"/>
-</VBox>
+    <top>
+        <MenuBar fx:id="menuBar">
+            <Menu text="Game">
+                <MenuItem fx:id="menuRestart" onAction="#handleRestartPuzzle" text="Restart Puzzle" />
+                <MenuItem fx:id="menuSave" onAction="#handleSaveGame" text="Save Game" />
+
+                <MenuItem fx:id="menuLoad" onAction="#handleLoadGame" text="Load Game" />
+                <SeparatorMenuItem />
+                <MenuItem fx:id="menuExit" onAction="#handleExitGame" text="Exit" />
+            </Menu>
+            <Menu text="Editor">
+                <CheckMenuItem fx:id="menuEditorMode" onAction="#handleToggleEditorMode" text="Editor Mode" />
+            </Menu>
+            <Menu text="Actions">
+                <MenuItem fx:id="menuCheckSolvability" onAction="#handleCheckSolvability" text="Check Solvability" />
+                <MenuItem fx:id="menuSolutionHint" onAction="#handleGetSolutionHint" text="Get Solution Hint" />
+            </Menu>
+        </MenuBar>
+    </top>
+
+    <center>
+        <StackPane fx:id="boardWrapperPane" style="-fx-background-color: #ECEFF1;">
+            <GridPane fx:id="boardGridPane" alignment="CENTER" hgap="1" style="-fx-background-color: #CFD8DC; -fx-padding: 2;" vgap="1">
+                <Pane prefHeight="50" prefWidth="50" style="-fx-background-color: lightgrey;" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+            <columnConstraints>
+               <ColumnConstraints />
+            </columnConstraints>
+            <rowConstraints>
+               <RowConstraints />
+            </rowConstraints>
+            </GridPane>
+        </StackPane>
+    </center>
+
+    <right>
+        <VBox alignment="TOP_CENTER" prefWidth="200" spacing="5" style="-fx-background-color: #FAFAFA; -fx-padding: 10;">
+         <Button fx:id="hintButton" mnemonicParsing="false" text="Hint!" onAction="#handleHintButtonAction"/>
+            <Label style="-fx-font-weight: bold;" text="Available Pieces" />
+            <ScrollPane fx:id="availablePiecesScrollPane" fitToWidth="true" hbarPolicy="NEVER" prefHeight="600.0">
+                <TilePane fx:id="availablePiecesPane" alignment="TOP_CENTER" hgap="5" prefColumns="2" style="-fx-padding: 5;" vgap="5">
+                    <Pane prefHeight="60" prefWidth="60" style="-fx-background-color: lightblue; -fx-border-color: black;" />
+                </TilePane>
+            </ScrollPane>
+            <Button fx:id="rotateSelectedPieceButton" maxWidth="Infinity" onAction="#handleRotateSelectedPiece" text="Rotate Selected Piece" />
+        </VBox>
+    </right>
+
+    <bottom>
+        <HBox alignment="CENTER_LEFT" style="-fx-padding: 5; -fx-border-style: solid hidden hidden hidden; -fx-border-width: 1;                -fx-border-color: lightgrey;">
+            <Label fx:id="statusLabel" text="MacMahon Mosaic" />
+        </HBox>
+    </bottom>
+
+</BorderPane>
