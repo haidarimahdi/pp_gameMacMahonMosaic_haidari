@@ -8,10 +8,10 @@ public class Field {
     private int rows;
     private int columns;
     private MosaicPiece[][] pieces;
-    private final Map<Position, String> borderColors;
+    private final Map<String, String> borderColors;
     private final Set<Position> holes;
 
-    public Field(int rows, int columns, Map<Position, String> borderColors, Set<Position> holes) {
+    public Field(int rows, int columns, Map<String, String> borderColors, Set<Position> holes) {
         this.rows = rows;
         this.columns = columns;
         this.pieces = new MosaicPiece[rows][columns];
@@ -54,9 +54,9 @@ public class Field {
         // @TODO: Implement error highlighting logic
     }
 
-    public void setBorderColor(Position corderEdge, char color) {
-        borderColors.put(corderEdge, String.valueOf(color));
-    }
+//    public void setBorderColor(Position corderEdge, char color) {
+//        borderColors.put(corderEdge, String.valueOf(color));
+//    }
 
     public void setHole(int row, int column) {
         holes.add(new Position(row, column));
@@ -118,5 +118,13 @@ public class Field {
             }
         }
         return copy;
+    }
+
+    public Set<Position> getHoles() {
+        return holes;
+    }
+
+    public void removeHole(int gameLogicRow, int gameLogicCol) {
+        holes.remove(new Position(gameLogicRow, gameLogicCol));
     }
 }

@@ -7,12 +7,33 @@ public class Game {
     private final GUIConnector gui;
     private Field gameField;
     private List<MosaicPiece> availablePieces;
-    private List<MosaicPiece> allPuzzlePieces; // Master list from TileLoader
+    private final List<MosaicPiece> allPuzzlePieces; // Master list from TileLoader
     private boolean editorMode;
-    private Random randomGenerator = new Random();
+    private final Random randomGenerator = new Random();
     private MosaicPiece selectedPiece;
     private Map<String, String> currentBoardBorderColors;
 
+    private boolean isEditorMode = false; // Flag to track if the game is in editor mode
+
+    public boolean isEditorMode() {
+        return isEditorMode;
+    }
+
+    public PuzzleConfiguration getPuzzleConfiguration() {
+        PuzzleConfiguration config = new PuzzleConfiguration();
+        config.rows = this.gameField.getRows();
+        config.cols = this.gameField.getColumns();
+        config.borderColors = this.currentBoardBorderColors;
+        config.holes = this.gameField.getHoles();
+
+        return config;
+    }
+
+    public void loadPuzzleFromConfiguration(PuzzleConfiguration config) {
+        this.currentBoardBorderColors = config.borderColors;
+        this.gameField = new Field(config.rows, config.cols, config.borderColors, config.holes);
+        switchToEditorMode();
+    }
     public Map<String, String> predefinedBorderColors() {
         Map<String, String> borderColors = new HashMap<>();
         // Example: Top border colors for a 4x3 puzzle
@@ -21,6 +42,67 @@ public class Game {
         borderColors.put("TOP_2", "YELLOW");
         // Add other borders as needed
         return borderColors;
+    }
+
+    public void setEditorBorderColor(String borderKey, String newColor) {
+        String[] parts = borderKey.split("_");
+        String side = parts[0];
+        int index = Integer.parseInt(parts[1]);
+        Position position = switch (side) {
+            case "TOP" -> new Position(0, index);
+            case "BOTTOM" -> new Position(gameField.getRows() - 1, index);
+            case "LEFT" -> new Position(index, 0);
+            case "RIGHT" -> new Position(index, gameField.getColumns() - 1);
+            default -> throw new IllegalArgumentException("Invalid border key: " + borderKey);
+        };
+        currentBoardBorderColors.put(borderKey, newColor);
+        gui.updateBorderColor(borderKey, newColor);
+    }
+
+    public void toggleHoleState(int gameLogicRow, int gameLogicCol) {
+        if (gameField == null) {
+            gui.showStatusMessage("Error: Game field not initialized.");
+            return;
+        }
+
+        if (gameField.isCellHole(gameLogicRow, gameLogicCol)) {
+            gameField.removeHole(gameLogicRow, gameLogicCol);
+            gui.updateGameCell(gameLogicRow, gameLogicCol, null, null, 0,
+                    false, false); // Clear the cell
+            gui.showStatusMessage("Removed hole at (" + gameLogicRow + "," + gameLogicCol + ").");
+            return;
+        }
+
+        int totalCells = gameField.getRows() * gameField.getColumns();
+        if (totalCells <= 24) {
+            gui.showStatusMessage("Holes are only allowed on boards larger than 24 cells.");
+            return;
+        }
+
+        int requiredHoles = totalCells - 24;
+        int currentHoles = gameField.getNumberOfHoles();
+
+        if (currentHoles >= requiredHoles) {
+            gui.showStatusMessage("You have already placed the required " + requiredHoles + " holes.");
+            return;
+        }
+
+        gameField.setHole(gameLogicRow, gameLogicCol);
+        gui.updateGameCell(gameLogicRow, gameLogicCol, null, null, 0,
+                true, true); // Mark the cell as a hole
+        gui.showStatusMessage("Added hole at (" + gameLogicRow + "," + gameLogicCol + ")." +
+                (currentHoles + 1) + " of " + requiredHoles + " holes placed.");
+    }
+
+    public void startEditor(int newRows, int newCols) {
+        this.isEditorMode = true;
+        this.currentBoardBorderColors = new HashMap<>();
+        Set<Position> holes = new HashSet<>();
+        this.gameField = new Field(newRows, newCols, this.currentBoardBorderColors, holes);
+
+        gui.initializeBoardView(newRows, newCols, this.currentBoardBorderColors);
+        gui.displayAvailablePieces(Collections.emptyList()); // No pieces in editor mode
+        gui.setEditorMode(true);
     }
 
     // Helper record for predefined puzzle configurations for testing
@@ -43,24 +125,25 @@ public class Game {
          */
         Map<String, String> getBorderColors(int numCols, int numRows) {
             Map<String, String> borderMap = new HashMap<>();
-            // Top borders (puzzle row 0, game cell's North edge)
+            // Top borders
             for (int c = 0; c < numCols && c < topBorderSegments.length; c++) {
                 borderMap.put("TOP_" + c, getColorStringFromChar(topBorderSegments[c].charAt(2)));
             }
-            // Bottom borders (puzzle row numRows-1, game cell's South edge)
+            // Bottom borders
             for (int c = 0; c < numCols && c < bottomBorderSegments.length; c++) {
-                borderMap.put("BOTTOM_" + c, getColorStringFromChar(bottomBorderSegments[c].charAt(0))); // Border piece's North edge faces South to game cell
+                borderMap.put("BOTTOM_" + c, getColorStringFromChar(bottomBorderSegments[c].charAt(0)));
             }
-            // Left borders (puzzle col 0, game cell's West edge)
+            // Left borders
             for (int r = 0; r < numRows && r < leftBorderSegments.length; r++) {
-                borderMap.put("LEFT_" + r, getColorStringFromChar(leftBorderSegments[r].charAt(1))); // Border piece's East edge faces West to game cell
+                borderMap.put("LEFT_" + r, getColorStringFromChar(leftBorderSegments[r].charAt(1)));
             }
-            // Right borders (puzzle col numCols-1, game cell's East edge)
+            // Right borders
             for (int r = 0; r < numRows && r < rightBorderSegments.length; r++) {
-                borderMap.put("RIGHT_" + r, getColorStringFromChar(rightBorderSegments[r].charAt(3))); // Border piece's West edge faces East to game cell
+                borderMap.put("RIGHT_" + r, getColorStringFromChar(rightBorderSegments[r].charAt(3)));
             }
             return borderMap;
         }
+
 
         private String getColorStringFromChar(char colorChar) {
             return switch (colorChar) {
@@ -80,7 +163,8 @@ public class Game {
     private List<PredefinedPuzzle> predefinedPuzzles;
 
     // Constructor for testing purposes
-    public Game(GUIConnector gui, Field gameField, List<MosaicPiece> availablePieces, List<MosaicPiece> allPuzzlePieces, Map<String, String> currentBoardBorderColors) {
+    public Game(GUIConnector gui, Field gameField, List<MosaicPiece> availablePieces, List<MosaicPiece> allPuzzlePieces,
+                Map<String, String> currentBoardBorderColors) {
         this.gui = gui;
         this.gameField = gameField;
         this.availablePieces = availablePieces;
@@ -128,7 +212,6 @@ public class Game {
             gui.showStatusMessage("Cannot start game: Tile definitions are missing.");
             return;
         }
-        System.out.println("all pieces are available");
 
         Map<String, String> borderColorsForGUI;
         Set<Position> holesForField = Collections.emptySet(); // Default: no holes for 4x3
@@ -149,8 +232,15 @@ public class Game {
             // For now, create generic borders and warn about solvability.
             gui.showStatusMessage("Warning: Using generic borders for " + initialGameRows + "x" + initialGameColumns + " size. Solvability not guaranteed.");
             borderColorsForGUI = new HashMap<>(); // Placeholder: fill with some default (e.g., all RED)
-            for(int c=0; c<initialGameColumns; c++) { borderColorsForGUI.put("TOP_"+c, "RED"); borderColorsForGUI.put("BOTTOM_"+c, "RED");}
-            for(int r=0; r<initialGameRows; r++) { borderColorsForGUI.put("LEFT_"+r, "RED"); borderColorsForGUI.put("RIGHT_"+r, "RED");}
+            for(int c = 0; c < initialGameColumns; c++) {
+                borderColorsForGUI.put("", "RED");
+                borderColorsForGUI.put("", "RED");
+            }
+
+            for(int r = 0; r < initialGameRows; r++) {
+                borderColorsForGUI.put("", "RED");
+                borderColorsForGUI.put("", "RED");
+            }
 
             if ((initialGameRows * initialGameColumns) > 24) {
                 // TODO: Implement logic to add (rows * cols - 24) holes ensuring solvability.
@@ -237,9 +327,9 @@ public class Game {
 
         // Update the specific game cell view, indicating error if not valid
         gui.updateGameCell(gameRow, gameCol, pieceToPlace.getColorPattern(),
-                pieceToPlace.getColorPattern(), // pieceImagePath (can be pattern)
-                pieceToPlace.getOrientation(),
-                !isValidPlacement); // isError = true if placement is NOT valid
+                pieceToPlace.getColorPattern(), pieceToPlace.getOrientation(),
+                !isValidPlacement, // isError = true if placement is NOT valid
+                false);
 
         // Refresh the entire list of available pieces in the GUI
         List<String> currentAvailableReps = new ArrayList<>();
@@ -275,6 +365,20 @@ public class Game {
     }
 
     /**
+     * Clears the game board by removing all pieces from the field
+     * and returning them to the list of available pieces.
+     */
+    public void clearBoard() {
+        for (int r = 0; r < gameField.getRows(); r++) {
+            for (int c = 0; c < gameField.getColumns(); c++) {
+                if (!gameField.isCellEmpty(r, c) && !gameField.isCellHole(r, c)) {
+                    removePieceFromField(r, c);
+                }
+            }
+        }
+    }
+
+    /**
      * Removes a piece from the specified cell on the game field and returns it
      * to the list of available pieces. Updates the GUI accordingly.
      *
@@ -282,7 +386,7 @@ public class Game {
      * @param gameCol The 0-indexed column of the cell from which to remove the piece.
      */
     public void removePieceFromField(int gameRow, int gameCol) {
-        System.out.println("Game: removePieceFromField called for (" + gameRow + "," + gameCol + ")");
+//        System.out.println("Game: removePieceFromField called for (" + gameRow + "," + gameCol + ")");
 
         if (gameField == null) {
             gui.showStatusMessage("Error: Game field not initialized.");
@@ -328,9 +432,6 @@ public class Game {
                 }
                 if (!alreadyInAvailableList) {
                     availablePieces.add(originalPieceToAddBack); // Add the original piece back
-//                    System.out.println("Logic: Piece " + originalPieceToAddBack.getColorPattern() + " added back to available pieces.");
-                } else {
-//                    System.out.println("Logic: Piece " + originalPieceToAddBack.getColorPattern() + " was already in available pieces (no re-add).");
                 }
             } else {
                 // This should ideally not happen if allPuzzlePieces is correctly managed
@@ -342,7 +443,7 @@ public class Game {
 
             // 3. Update the GUI to show the cell as empty
             // pieceId and pieceImagePath are null, rotation is irrelevant (0), no error.
-            gui.updateGameCell(gameRow, gameCol, null, null, 0, false);
+            gui.updateGameCell(gameRow, gameCol, null, null, 0, false, false);
 
             // 4. Refresh the "Available Pieces" panel in the GUI
             List<String> currentAvailablePiecePatterns = new ArrayList<>();
@@ -366,14 +467,121 @@ public class Game {
         }
     }
 
+    public void switchToEditorMode() {
+        this.editorMode = true;
+        clearBoard();
+        gui.setEditorMode(true);
+        gui.showStatusMessage("Switched to Editor Mode. You can now edit the game board.");
+    }
+
+    public void switchToGameMode() {
+        this.isEditorMode = false;
+
+        this.availablePieces = new ArrayList<>(this.allPuzzlePieces); // Reset available pieces to all
+
+        clearBoard();
+
+        List<String> pieceRepresentationsForGUI = new ArrayList<>();
+        for (MosaicPiece piece : this.availablePieces) {
+            pieceRepresentationsForGUI.add(piece.getColorPattern());
+        }
+        gui.setEditorMode(false);
+        gui.displayAvailablePieces(pieceRepresentationsForGUI);
+        gui.showStatusMessage("Switched to Game Mode. You can now play the game.");
+    }
+
+    public boolean isPuzzleReadyToPlay() {
+        for (int c = 0; c < gameField.getColumns(); c++) {
+            // Check TOP border
+            if (isBorderSegmentValid("TOP_" + c)) return false;
+            // Check BOTTOM border
+            if (isBorderSegmentValid("BOTTOM_" + c)) return false;
+        }
+
+        for (int r = 0; r < gameField.getRows(); r++) {
+            // Check LEFT border
+            if (isBorderSegmentValid("LEFT_" + r)) return false;
+            // Check RIGHT border
+            if (isBorderSegmentValid("RIGHT_" + r)) return false;
+        }
+
+        int totalCells = gameField.getRows() * gameField.getColumns();
+        if (totalCells > 24) {
+            int requiredHoles = totalCells - 24;
+            if (gameField.getNumberOfHoles() < requiredHoles) {
+                gui.showStatusMessage("Error: For a " + gameField.getRows() + "x" + gameField.getColumns() +
+                        " board, you need at least " + requiredHoles + " holes.");
+                return false;
+            }
+        }
+    if (!isPuzzleSolvable()) {
+            gui.showStatusMessage("Error: The current puzzle configuration is not solvable.");
+            return false;
+        }
+
+        return true; // All checks passed, puzzle is ready to play
+    }
+
+    /**
+     * Checks if the border segment is valid according to the rules:
+     * - If it has a color, it's valid.
+     * - If it doesn't have a color, it must be adjacent to a hole.
+     * @param borderKey The key for the border segment (e.g., "TOP_0", "LEFT_1").
+     * @return true if the segment is valid, false if it needs a color or is invalid.
+     */
+    private boolean isBorderSegmentValid(String borderKey) {
+        String color = currentBoardBorderColors.get(borderKey);
+        boolean isColorMissing = (color == null || color.isEmpty() || color.equals("NONE"));
+
+        if (!isColorMissing) {
+            return false; // Color is present, segment is valid.
+        }
+
+        // Color is missing, check if the adjacent cell is a hole.
+        Position adjacentCell = getAdjacentCellForBorderKey(borderKey);
+        if (adjacentCell != null && gameField.isCellHole(adjacentCell.row(), adjacentCell.column())) {
+            return false; // Color is missing, but it's next to a hole, so it's valid.
+        }
+
+        // Color is missing and it's not next to a hole. Invalid.
+        gui.showStatusMessage("Error: Border segment " + borderKey + " needs a color.");
+        return true;
+    }
+
+    /**
+     * Helper method to get the coordinates of the game cell adjacent to a given border segment.
+     *
+     * @param borderKey The key for the border segment (e.g., "TOP_0").
+     * @return The Position of the adjacent cell.
+     */
+    private Position getAdjacentCellForBorderKey(String borderKey) {
+        if (borderKey == null || !borderKey.contains("_")) return null;
+
+        String[] parts = borderKey.split("_");
+        String side = parts[0];
+        int index = Integer.parseInt(parts[1]);
+
+        return switch (side) {
+            case "TOP" -> new Position(0, index);
+            case "BOTTOM" -> new Position(gameField.getRows() - 1, index);
+            case "LEFT" -> new Position(index, 0);
+            case "RIGHT" -> new Position(index, gameField.getColumns() - 1);
+            default -> null;
+        };
+    }
+
+
     public MosaicPiece getSelectedPieceForPlacement() {
         return this.selectedPiece;
     }
 
     public void restartGame() {
-        this.gameField = new Field(5, 5, null, null); // Placeholder for border colors and holes
-        this.availablePieces = List.of(); // Placeholder for available pieces
-        this.allPuzzlePieces = List.of(); // Placeholder for all possible pieces
+        if (gameField == null) {
+            gui.showStatusMessage("Error: Game field not initialized.");
+            return;
+        }
+        startGame(4, 3);
+
     }
 
     public boolean saveGame(String filePath) {
@@ -443,80 +651,6 @@ public class Game {
      * @return {@code true} if the placement is valid, {@code false} otherwise.
      */
     private boolean checkPlacementValidity(MosaicPiece piece, int row, int col) {
-//        if (piece == null) {
-//            System.err.println("checkPlacementValidity: Called with a null piece.");
-//            return false; // Cannot validate a null piece
-//        }
-//        if (gameField == null) {
-//            System.err.println("checkPlacementValidity: gameField is null.");
-//            return false;
-//        }
-////        System.out.println(">>> Validating piece " + piece.getColorPattern() + " (Orient: " + piece.getOrientation() + "°) at (" + row + "," + col + ")"); // Added log
-//
-//        for (Direction edgeDirectionOfPiece : Direction.values()) {
-//            char pieceEdgeColor = piece.getEdgeColor(edgeDirectionOfPiece);
-//
-//            int neighborRow = row;
-//            int neighborCol = col;
-//
-//            // Determine coordinates of the cell adjacent to the current edge
-//            switch (edgeDirectionOfPiece) {
-//                case NORTH: neighborRow--; break;
-//                case EAST:  neighborCol++; break;
-//                case SOUTH: neighborRow++; break;
-//                case WEST:  neighborCol--; break;
-//            }
-//
-//            // Check against game board borders
-//            if (neighborRow < 0 || neighborRow >= gameField.getRows() ||
-//                    neighborCol < 0 || neighborCol >= gameField.getColumns()) {
-//
-//                String borderKey = getBorderSide(row, col, edgeDirectionOfPiece);
-////                System.out.println("    Edge " + edgeDirectionOfPiece + ": Border check. Key: " + borderKey + ", Piece Edge Color: " + pieceEdgeColor); // Added log
-//
-//
-//                if (borderKey != null && this.currentBoardBorderColors != null) {
-//                    String requiredBorderColorStr = this.currentBoardBorderColors.get(borderKey);
-//                    char requiredBorderColorChar = getColorCharFromColorString(requiredBorderColorStr);
-////                    System.out.println("        Required Border Color Str: " + requiredBorderColorStr +
-////                            ", Required Border Char: " + requiredBorderColorChar);
-//
-//                    if (requiredBorderColorChar != 'N' && requiredBorderColorChar != 'X' &&
-//                            pieceEdgeColor != requiredBorderColorChar) {
-////                        System.out.println("Validation Fail: Border mismatch at (" + row + "," + col +
-////                                "), edge " + edgeDirectionOfPiece + " (key: " + borderKey +
-////                                "). Piece has '" + pieceEdgeColor +
-////                                "', border requires '" + requiredBorderColorChar + "'.");
-//                        return false;
-//                    }else {
-////                        System.out.println("        Validation Pass for this border edge."); // Added log
-//                    }
-//                } else {
-////                    System.out.println("        Skipping border check: borderKey is null or currentBoardBorderColors is null."); // Added log
-//                }
-//            } else {
-//                if (gameField.isCellHole(neighborRow, neighborCol)) {
-//                    // Any color is allowed next to a hole, so this edge is fine.
-//                    continue;
-//                }
-//
-//                MosaicPiece adjacentPiece = gameField.getPieceAt(neighborRow, neighborCol);
-//                if (adjacentPiece != null) {
-//                    // Get the color of the adjacent piece's edge that touches the current piece's edge.
-//                    char adjacentPieceEdgeColor = adjacentPiece.getEdgeColor(edgeDirectionOfPiece.opposite());
-//
-//                    if (pieceEdgeColor != adjacentPieceEdgeColor) {
-////                        System.out.println("Validation Fail: Neighbor mismatch between (" + row + "," + col +
-////                                ") edge " + edgeDirectionOfPiece + " (color '" + pieceEdgeColor + "') and " +
-////                                "neighbor (" + neighborRow + "," + neighborCol + ") edge " +
-////                                edgeDirectionOfPiece.opposite() + " (color '" + adjacentPieceEdgeColor + "').");
-//                        return false;
-//                    }
-//                }
-//            }
-//        }
-//        System.out.println("<<< Validation Succeeded for piece at (" + row + "," + col + "). Returning true."); // Added log
-//        return true;
         return checkPlacementValidity(piece, row, col, this.gameField);
     }
 
@@ -649,9 +783,7 @@ public class Game {
      */
     private Field solvePuzzle(Field field, List<MosaicPiece> availablePieces) {
         Position nextEmpty = field.findNextEmptyCell();
-        System.out.println("Next empty cell found at: " + (nextEmpty == null ? "None" : "(" + nextEmpty.row() + "," + nextEmpty.column() + ")"));
         if (nextEmpty == null) {
-            System.out.println("All cells filled! Returning solved field.");
             return field;
         }
 
@@ -669,8 +801,6 @@ public class Game {
 
                     Field solution = solvePuzzle(field, remainingPieces);
                     if (solution != null) {
-                        System.out.println("Backtracking: Found a valid placement for piece " + orientedPiece.getColorPattern() +
-                                " at (" + nextEmpty.row() + "," + nextEmpty.column() + ").");
                         return solution; // Found a valid solution
                     }
                     field.setPieceAt(nextEmpty.row(), nextEmpty.column(), null); // Backtrack
@@ -678,7 +808,6 @@ public class Game {
             }
         }
 
-        System.out.println("Backtracking: No valid placement found for piece at (" + nextEmpty.row() + "," + nextEmpty.column() + ").");
         // If we've tried all pieces in all orientations and none led to a solution,
         // this path is a dead end.
         return null;
@@ -691,7 +820,6 @@ public class Game {
         List<MosaicPiece> piecesCopy = new ArrayList<>(this.availablePieces);
 
         Field solution = solvePuzzle(fieldCopy, piecesCopy);
-        System.out.println("Solvability check complete. Solution " + (solution != null ? "found." : "not found."));
 
         return solution != null;
     }

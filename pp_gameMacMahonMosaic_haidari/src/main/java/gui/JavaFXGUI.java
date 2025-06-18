@@ -13,9 +13,11 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
 import logic.GUIConnector;
+import logic.Position;
 import logic.SelectedPieceDataFromPanel;
 
 import java.util.*;
@@ -25,12 +27,11 @@ public class JavaFXGUI implements GUIConnector {
     // --- FXML Injected Fields ---
 
     // Right panel for available pieces
-    private TilePane availablePiecesPane;
-    private ScrollPane availablePiecesScrollPane;
-    private Button rotateSelectedPieceButton;
+    private final TilePane availablePiecesPane;
+    private final Button rotateSelectedPieceButton;
 
     // Center GridPane for the board
-    private GridPane boardGridPane;
+    private final GridPane boardGridPane;
 
     // MenuBar and MenuItems
     private MenuBar menuBar;
@@ -43,7 +44,7 @@ public class JavaFXGUI implements GUIConnector {
     private MenuItem menuSolutionHint;
 
     // Bottom status label
-    private Label statusLabel;
+    private final Label statusLabel;
 
     // Constants for visual representation
 
@@ -55,16 +56,20 @@ public class JavaFXGUI implements GUIConnector {
     private final Random random = new Random(); // For placeholder border colors
     private SelectedPieceDataFromPanel currentSelectedPieceInfo = null;
     private Node currentlySelectedNodeVisual = null; // To keep track of the styled node
+    private double currentCellSize = 60;
 
 
 
-    public JavaFXGUI(GridPane boardGridPane, TilePane availablePiecesPane, ScrollPane availablePiecesScrollPane,
+    public JavaFXGUI(GridPane boardGridPane, TilePane availablePiecesPane,
                      Button rotateSelectedPieceButton,  Label statusLabel) {
         this.boardGridPane = boardGridPane;
         this.availablePiecesPane = availablePiecesPane;
-        this.availablePiecesScrollPane = availablePiecesScrollPane;
         this.rotateSelectedPieceButton = rotateSelectedPieceButton;
         this.statusLabel = statusLabel;
+    }
+
+    public void setCurrentCellSize(double size) {
+        this.currentCellSize = size;
     }
 
 
@@ -133,35 +138,23 @@ public class JavaFXGUI implements GUIConnector {
             for (int r_gui = 0; r_gui < totalGridRows; r_gui++) {
                 for (int c_gui = 0; c_gui < totalGridCols; c_gui++) {
                     Node cellNode;
-                    // Corners
-                    if ((r_gui == 0 || r_gui == totalGridRows - 1) && (c_gui == 0 || c_gui == totalGridCols - 1)) {
-                        cellNode = createCornerOrBorderCellVisual(Color.DARKGRAY); // Corner
-                    }
-                    // Top/Bottom Borders
-                    else if (r_gui == 0 && c_gui <= gameCols) {
-                        String key = "TOP_" + (c_gui - 1);
+                    boolean isGameCell = (r_gui > 0 && r_gui <= gameRows && c_gui > 0 && c_gui <= gameCols);
+
+                    if (isGameCell) {
+                        cellNode = createGameCellVisual(null, null, 0, false, false);
+                    } else {
+                        String key = "";
+                        if (r_gui == 0 && c_gui > 0 && c_gui <= gameCols) { // Top Border
+                            key = "TOP_" + (c_gui - 1);
+                        } else if (r_gui == totalGridRows - 1 && c_gui > 0 && c_gui <= gameCols) { // Bottom Border
+                            key = "BOTTOM_" + (c_gui - 1);
+                        } else if (c_gui == 0 && r_gui > 0 && r_gui <= gameRows) { // Left Border
+                            key = "LEFT_" + (r_gui - 1);
+                        } else if (c_gui == totalGridCols - 1 && r_gui > 0 && r_gui <= gameRows) { // Right Border
+                            key = "RIGHT_" + (r_gui - 1);
+                        }
                         Color color = colorFromString(currentBorderColors.getOrDefault(key, "NONE"));
                         cellNode = createCornerOrBorderCellVisual(color);
-                    } else if (r_gui == totalGridRows - 1 && c_gui > 0 && c_gui <= gameCols) {
-                        String key = "BOTTOM_" + (c_gui - 1);
-                        Color color = colorFromString(currentBorderColors.getOrDefault(key, "NONE"));
-                        cellNode = createCornerOrBorderCellVisual(color);
-                    }
-                    // Left/Right Borders
-                    else if (c_gui == 0 && r_gui <= gameRows) {
-                        String key = "LEFT_" + (r_gui - 1);
-                        Color color = colorFromString(currentBorderColors.getOrDefault(key, "NONE"));
-                        cellNode = createCornerOrBorderCellVisual(color);
-                    } else if (c_gui == totalGridCols - 1 && r_gui > 0 && r_gui <= gameRows) {
-                        String key = "RIGHT_" + (r_gui - 1);
-                        Color color = colorFromString(currentBorderColors.getOrDefault(key, "NONE"));
-                        cellNode = createCornerOrBorderCellVisual(color);
-                    }
-                    // Game Cells
-                    else { // This implies (r_gui > 0 && r_gui <= gameRows && c_gui > 0 && c_gui <= gameCols)
-                        cellNode = createGameCellVisual(null, null, 0,false);
-                        GridPane.setHalignment(cellNode, HPos.CENTER);
-                        GridPane.setValignment(cellNode, VPos.CENTER);
                     }
                     boardGridPane.add(cellNode, c_gui, r_gui);
                 }
@@ -184,18 +177,31 @@ public class JavaFXGUI implements GUIConnector {
     private Color colorFromString(String colorName) {
         if (colorName == null) return Color.GRAY;
         return switch (colorName.toUpperCase()) {
-            case "RED" -> Color.RED;
-            case "GREEN" -> Color.GREEN;
-            case "YELLOW" -> Color.YELLOW;
+            case "RED" -> Color.web("#C00000");
+            case "GREEN" -> Color.web("#008000");
+            case "YELLOW" -> Color.web("#FFC500");
             case "NONE" -> Color.TRANSPARENT; // So "NONE" border segments are not explicitly colored
             default -> Color.LIGHTGRAY; // Fallback for unexpected color strings
         };
     }
 
-    private Node createGameCellVisual(String pieceId, String pieceImagePath, int rotationDegrees, boolean isError) {
+    private Node createGameCellVisual(String pieceId, String pieceImagePath, int rotationDegrees,
+                                      boolean isError, boolean isHole) {
         StackPane cellPane = new StackPane();
         cellPane.setAlignment(Pos.CENTER);
 
+        // Apply the stored size constraints to the new cell pane
+        if (this.currentCellSize > 1) {
+            cellPane.setPrefSize(this.currentCellSize, this.currentCellSize);
+            cellPane.setMinSize(this.currentCellSize, this.currentCellSize);
+            cellPane.setMaxSize(this.currentCellSize, this.currentCellSize);
+        }
+//        else {
+//            // If currentCellSize is not set or invalid, use default size
+//            cellPane.setPrefSize(60, 60);
+//            cellPane.setMinSize(60, 60);
+//            cellPane.setMaxSize(60, 60);
+//        }
         // Placeholder visual content (e.g., a semi-transparent rectangle or imageview)
         Rectangle bgRect = new Rectangle(); // No fixed size here
         bgRect.setFill(Color.LIGHTSLATEGRAY); // Default empty cell color
@@ -206,8 +212,18 @@ public class JavaFXGUI implements GUIConnector {
         bgRect.heightProperty().bind(cellPane.heightProperty());
         cellPane.getChildren().add(bgRect);
 
+        if (isHole) {
+            Circle holeMarker = new Circle();
+            holeMarker.setFill(Color.WHITE);
+            holeMarker.setStroke(Color.LIGHTGRAY);
+            holeMarker.setStrokeWidth(1.5);
 
-        if (pieceId != null) {
+            holeMarker.radiusProperty().bind(
+                    javafx.beans.binding.Bindings.min(
+                            cellPane.widthProperty(), cellPane.heightProperty()).divide(2).subtract(3) // Leave some padding
+            );
+            cellPane.getChildren().add(holeMarker);
+        } else if (pieceId != null) {
             ImageView pieceImageView = getImageViewForPiece(pieceId, pieceImagePath);
             pieceImageView.setRotate(rotationDegrees);
             pieceImageView.setMouseTransparent(true);
@@ -217,7 +233,7 @@ public class JavaFXGUI implements GUIConnector {
             cellPane.getChildren().add(pieceImageView);
         }
 
-        if (isError) {
+        if (isError && !isHole) { // If this cell is in an error state
             cellPane.setStyle("-fx-effect: dropshadow(gaussian, red, 10, 0.6, 0, 0); -fx-border-color: red; -fx-border-width: 1.5px;");
 
         } else {
@@ -256,7 +272,8 @@ public class JavaFXGUI implements GUIConnector {
 
 
     @Override
-    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegree, boolean isError) {
+    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegree,
+                               boolean isError, boolean isHole) {
         Platform.runLater(() -> {
             if (boardGridPane == null) {
                 System.err.println("JavaFXGUI Error: boardGridPane is null in updateGameCell!");
@@ -268,7 +285,7 @@ public class JavaFXGUI implements GUIConnector {
 
             Node existingNode = getNodeByRowColumnIndex(gridR, gridC, boardGridPane);
             // Pass currentGuiGameRows/Cols to createGameCellVisual if needed for bindings
-            Node newVisual = createGameCellVisual(pieceId, pieceImagePath, rotationDegree, isError);
+            Node newVisual = createGameCellVisual(pieceId, pieceImagePath, rotationDegree, isError, isHole);
             GridPane.setHalignment(newVisual, HPos.CENTER);
             GridPane.setValignment(newVisual, VPos.CENTER);
 
@@ -329,13 +346,12 @@ public class JavaFXGUI implements GUIConnector {
     }
 
     private void handleAvailablePieceClick(Node pieceViewNode, String pieceRep) {
-//        availablePiecesPane.getChildren().forEach(node -> node.setStyle("-fx-effect: null;"));
-//        pieceViewNode.setStyle("-fx-effect: dropshadow(gaussian, blue, 10, 0.5, 0, 0);");
-//        enableRotationButton(true);
-//        if (statusLabel != null) {
-//            statusLabel.setText("Selected: " + pieceRep);
-//        }
-//        System.out.println("Piece " + pieceRep + " selected in JavaFXGUI.");
+        // Check if the clicked node is already selected
+        if (this.currentlySelectedNodeVisual == pieceViewNode) {
+            clearSelectionFromPanel();
+            return;
+        }
+
         if (this.currentlySelectedNodeVisual != null) {
             this.currentlySelectedNodeVisual.setStyle("-fx-effect: null;");
         }
@@ -343,15 +359,18 @@ public class JavaFXGUI implements GUIConnector {
         // Apply new selection
         pieceViewNode.setStyle("-fx-effect: dropshadow(gaussian, blue, 10, 0.5, 0, 0);");
         this.currentlySelectedNodeVisual = pieceViewNode;
-        if (rotateSelectedPieceButton!=null) rotateSelectedPieceButton.setDisable(false);
+        if (rotateSelectedPieceButton!=null) {
+            rotateSelectedPieceButton.setDisable(false);
+        }
 
 
-        double currentRotation = 0;
+        double currentRotation;
         // Determine the rotation from the node that would be rotated
         // (ImageView or StackPane)
         Node visualRepresentation = pieceViewNode;
         if(pieceViewNode instanceof StackPane){
-            visualRepresentation = ((StackPane) pieceViewNode).getChildren().stream().filter(ImageView.class::isInstance).findFirst().orElse(pieceViewNode);
+            visualRepresentation = ((StackPane) pieceViewNode).getChildren().stream()
+                    .filter(ImageView.class::isInstance).findFirst().orElse(pieceViewNode);
         }
         currentRotation = visualRepresentation.getRotate();
 
@@ -361,7 +380,6 @@ public class JavaFXGUI implements GUIConnector {
         if (statusLabel != null) {
             statusLabel.setText("Selected: " + pieceRep + " (" + (int)currentRotation + "°)");
         }
-        System.out.println("JavaFXGUI: Clicked and stored: " + pieceRep + ", Rotation: " + currentRotation);
     }
 
     @Override
@@ -380,33 +398,20 @@ public class JavaFXGUI implements GUIConnector {
         });
     }
 
-//    @Override
-//    public void highlightGameCells(List<Object> coordinates) {
-//        Platform.runLater(() -> {
-//            // TODO: Implement highlighting logic. Requires Coordinate class/record
-//            // Example: Iterate through coordinates, find cell Node, apply style
-//            // clearCellHighlights(); // Optional: clear previous before applying new
-//            // for (Object coordObj : coordinates) {
-//            // Coordinate coord = (Coordinate) coordObj; // Cast to your Coordinate type
-//            // Node cellNode = getNodeByRowColumnIndex(coord.r() + 1, coord.c() + 1, boardGrid);
-//            // if (cellNode != null) cellNode.setStyle("-fx-background-color: yellow; -fx-border-color: orange; -fx-border-width: 2px;");
-//            // }
-//            System.out.println("GUI: Highlighting cells: " + coordinates);
-//        });
-//    }
-
     @Override
     public void clearCellHighlights() {
         Platform.runLater(() -> {
-            // TODO: Implement clearing highlight logic
-            // Iterate game cells and reset style
-            // for (int r = 0; r < currentGuiGameRows; r++) {
-            // for (int c = 0; c < currentGuiGameCols; c++) {
-            // Node cellNode = getNodeByRowColumnIndex(r + 1, c + 1, boardGrid);
-            // if (cellNode != null) updateGameCell(r,c, ... fetch current piece state ..., false); // Re-render without error
-            // }
-            // }
-            System.out.println("GUI: Clearing highlights");
+            if (boardGridPane == null) {
+                System.err.println("JavaFXGUI Error: boardGridPane is null in clearCellHighlights!");
+                return;
+            }
+            for (Node node : boardGridPane.getChildren()) {
+                if (node instanceof StackPane stackPane) {
+                    stackPane.setStyle("-fx-effect: null; -fx-border-color: transparent; -fx-border-width: 0;");
+                } else {
+                    node.setStyle("-fx-effect: null; -fx-border-color: transparent; -fx-border-width: 0;");
+                }
+            }
         });
 
     }
@@ -501,6 +506,55 @@ public class JavaFXGUI implements GUIConnector {
                     default -> Color.LIGHTGRAY; // Fallback color
                 };
                 cellNode.setStyle("-fx-border-color: black; -fx-border-width: 2px;");
+            }
+        });
+    }
+
+    @Override
+    public void updateBorderColor(String borderKey, String newColor) {
+        Platform.runLater(() -> {
+            if (boardGridPane == null) {
+                System.err.println("JavaFXGUI Error: boardGridPane is null in updateBorderColor!");
+                return;
+            }
+
+            // Determine which border segment to update based on the key
+            String[] parts = borderKey.split("_");
+            if (parts.length != 2) {
+                System.err.println("JavaFXGUI Error: Invalid border key format: " + borderKey);
+                return;
+            }
+
+            String position = parts[0].toUpperCase(); // TOP, BOTTOM, LEFT, RIGHT
+            int index = Integer.parseInt(parts[1]);
+
+            int gridRow = 0, gridCol = 0;
+
+            switch (position) {
+                case "TOP":
+                    gridCol = index + 1; // +1 for the left border
+                    break;
+                case "BOTTOM":
+                    gridRow = currentGuiGameRows + 1; // +1 for the top border
+                    gridCol = index + 1; // +1 for the left border
+                    break;
+                case "LEFT":
+                    gridRow = index + 1; // +1 for the top border
+                    break;
+                case "RIGHT":
+                    gridRow = index + 1; // +1 for the top border
+                    gridCol = currentGuiGameCols + 1; // +1 for the left border
+                    break;
+                default:
+                    System.err.println("JavaFXGUI Error: Unknown position in border key: " + position);
+                    return;
+            }
+
+            Node existingNode = getNodeByRowColumnIndex(gridRow, gridCol, boardGridPane);
+            if (existingNode != null) {
+                existingNode.setStyle("-fx-background-color: " + newColor + ";");
+            } else {
+                System.err.println("JavaFXGUI Error: No node found at (" + gridRow + ", " + gridCol + ")");
             }
         });
     }

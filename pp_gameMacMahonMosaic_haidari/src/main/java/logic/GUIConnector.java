@@ -26,7 +26,8 @@ public interface GUIConnector {
      * @param rotationDegrees The rotation (0, 90, 180, 270) to apply to the piece's visual.
      * @param isError         True if this piece is currently in an error state.
      */
-    void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees, boolean isError);
+    void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees,
+                        boolean isError, boolean isHole);
 
     /**
      * Updates the visual representation of available pieces.
@@ -96,4 +97,6 @@ public interface GUIConnector {
      * @param colorPattern A string representing the color pattern to apply to the cell.
      */
     void highlightCell(int row, int column, String colorPattern);
+
+    void updateBorderColor(String borderKey, String newColor);
 }

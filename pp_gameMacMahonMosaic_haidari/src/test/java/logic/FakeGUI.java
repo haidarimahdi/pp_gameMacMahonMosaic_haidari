@@ -15,9 +15,10 @@ public class FakeGUI implements GUIConnector{
     }
 
     @Override
-    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees, boolean isError) {
+    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees,
+                               boolean isError, boolean isHole) {
         System.out.println("FakeGUI: updateGameCell called for (" + gameRow + "," + gameCol + ") with piece: "
-                + pieceId + ", error: " + isError);
+                + pieceId + ", error: " + isError + ", isHole: " + isHole);
     }
 
     @Override
@@ -75,5 +76,10 @@ public class FakeGUI implements GUIConnector{
     public void highlightCell(int row, int column, String colorPattern) {
             System.out.println("FakeGUI: highlightCell called for cell (" + row + "," + column +
                     ") with color pattern: " + colorPattern);
+    }
+
+    @Override
+    public void updateBorderColor(String borderKey, String newColor) {
+        System.out.println("FakeGUI: updateBorderColor called for borderKey: " + borderKey + " with new color: " + newColor);
     }
 }
