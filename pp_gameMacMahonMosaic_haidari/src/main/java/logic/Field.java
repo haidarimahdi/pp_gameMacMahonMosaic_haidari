@@ -5,9 +5,9 @@ import java.util.Set;
 
 public class Field {
 
-    private int rows;
-    private int columns;
-    private MosaicPiece[][] pieces;
+    private final int rows;
+    private final int columns;
+    private final MosaicPiece[][] pieces;
     private final Map<String, String> borderColors;
     private final Set<Position> holes;
 
@@ -19,72 +19,43 @@ public class Field {
         this.holes = holes;
     }
 
-    public MosaicPiece getPieceAt(int row, int column) {
-        return pieces[row][column];
-    }
-
-    public void setPieceAt(int row, int column, MosaicPiece piece) {
-        if (row >=0 && row < this.rows && column >=0 && column < this.columns) { // Bounds check
-            pieces[row][column] = piece; // Allows setting to null or a new piece
-        }
-    }
-
-    public boolean isCellEmpty(int row, int column) {
-        return pieces[row][column] == null;
-    }
-
-    public boolean isCellHole(int row, int column) {
-        return holes != null && holes.contains(new Position(row, column));
-    }
-
-    public boolean checkEdgeMatch(MosaicPiece piece, int row, int column, Direction direction) {
-        if (isCellEmpty(row, column)) {
-            return false;
-        }
-
-        MosaicPiece adjacentPiece = pieces[row][column];
-        char pieceColor = piece.getEdgeColor(direction);
-        char adjacentColor = adjacentPiece.getEdgeColor(direction.opposite());
-
-        return pieceColor == adjacentColor;
-    }
-
-    public void highlightErrors() {
-
-        // @TODO: Implement error highlighting logic
-    }
-
-//    public void setBorderColor(Position corderEdge, char color) {
-//        borderColors.put(corderEdge, String.valueOf(color));
-//    }
-
-    public void setHole(int row, int column) {
-        holes.add(new Position(row, column));
-    }
-
-    public void resize(int newRows, int newColumns) {
-        MosaicPiece[][] newPieces = new MosaicPiece[newRows][newColumns];
-        for (int i = 0; i < Math.min(rows, newRows); i++) {
-            System.arraycopy(pieces[i], 0, newPieces[i], 0, Math.min(columns, newColumns));
-        }
-        pieces = newPieces;
-        rows = newRows;
-        columns = newColumns;
-    }
+    // Getters and Setters
     public int getRows() {
         return rows;
     }
-
     public int getColumns() {
         return columns;
     }
-
-
+    public MosaicPiece getPieceAt(int row, int column) {
+        return pieces[row][column];
+    }
+    public Set<Position> getHoles() {
+        return holes;
+    }
     public int getNumberOfHoles() {
         return holes != null ? holes.size() : 0;
     }
+    public boolean isCellEmpty(int row, int column) {
+        return pieces[row][column] == null;
+    }
+    public boolean isCellHole(int row, int column) {
+        return holes != null && holes.contains(new Position(row, column));
+    }
+    public void setPieceAt(int row, int column, MosaicPiece piece) {
+        if (row >= 0 && row < this.rows && column >=0 && column < this.columns) {
+            if (piece != null) {
+                piece.setPlacement(row, column); // Update the piece's placement position
+            }
+            pieces[row][column] = piece; // Allows setting to null or a new piece
+        }
+    }
+    public void setHole(int row, int column) {
+        holes.add(new Position(row, column));
+    }
+    public void removeHole(int gameLogicRow, int gameLogicCol) {
+        holes.remove(new Position(gameLogicRow, gameLogicCol));
+    }
 
-    // find the next empty cell for the solver to fill
 
     /**
      * Finds the next empty cell in the field.
@@ -118,13 +89,5 @@ public class Field {
             }
         }
         return copy;
-    }
-
-    public Set<Position> getHoles() {
-        return holes;
-    }
-
-    public void removeHole(int gameLogicRow, int gameLogicCol) {
-        holes.remove(new Position(gameLogicRow, gameLogicCol));
     }
 }

@@ -177,9 +177,9 @@ public class JavaFXGUI implements GUIConnector {
     private Color colorFromString(String colorName) {
         if (colorName == null) return Color.GRAY;
         return switch (colorName.toUpperCase()) {
-            case "RED" -> Color.web("#C00000");
-            case "GREEN" -> Color.web("#008000");
-            case "YELLOW" -> Color.web("#FFC500");
+            case "RED" -> Color.web("#B60000");
+            case "GREEN" -> Color.web("#007F0E");
+            case "YELLOW" -> Color.web("#FFD800");
             case "NONE" -> Color.TRANSPARENT; // So "NONE" border segments are not explicitly colored
             default -> Color.LIGHTGRAY; // Fallback for unexpected color strings
         };

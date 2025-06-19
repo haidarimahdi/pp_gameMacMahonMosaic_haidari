@@ -1,6 +1,12 @@
 package logic;
 
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
+
+import java.io.*;
 import java.util.*;
 
 public class Game {
@@ -8,12 +14,11 @@ public class Game {
     private Field gameField;
     private List<MosaicPiece> availablePieces;
     private final List<MosaicPiece> allPuzzlePieces; // Master list from TileLoader
-    private boolean editorMode;
+    private boolean isEditorMode = false; // Flag to track if the game is in editor mode
     private final Random randomGenerator = new Random();
     private MosaicPiece selectedPiece;
     private Map<String, String> currentBoardBorderColors;
 
-    private boolean isEditorMode = false; // Flag to track if the game is in editor mode
 
     public boolean isEditorMode() {
         return isEditorMode;
@@ -29,11 +34,179 @@ public class Game {
         return config;
     }
 
-    public void loadPuzzleFromConfiguration(PuzzleConfiguration config) {
-        this.currentBoardBorderColors = config.borderColors;
-        this.gameField = new Field(config.rows, config.cols, config.borderColors, config.holes);
-        switchToEditorMode();
+    /**
+     * Loads a puzzle configuration from a specified file.
+     * This method handles the file reading and JSON parsing.
+     *
+     * @param file The .json file to load the puzzle from.
+     * @throws IOException If there is an error reading the file.
+     * @throws JsonSyntaxException If the file content is not valid JSON.
+     */
+    public void loadGameFromFile(File file) throws IOException, JsonSyntaxException {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        try (Reader reader = new FileReader(file)) {
+            JsonObject jsonObject = gson.fromJson(reader, JsonObject.class);
+            if (jsonObject == null) {
+                throw new JsonSyntaxException("The selected file is not a valid JSON file.");
+            }
+
+            // Check for keys to determine the format
+            if (jsonObject.has("field")) {
+                PuzzleFile puzzleData = gson.fromJson(jsonObject, PuzzleFile.class);
+                loadPuzzleFromPuzzleFile(puzzleData);
+            } else {
+                throw new JsonSyntaxException("The selected file is not a recognized puzzle format.");
+            }
+        }
     }
+
+    private void loadPuzzleFromPuzzleFile(PuzzleFile puzzleData) {
+        if (puzzleData.field.isEmpty() || puzzleData.field.get(0).isEmpty()) {
+            gui.showStatusMessage("Error: The puzzle file is empty");
+            return;
+        }
+
+//        this.isEditorMode = false;
+        int totalRows = puzzleData.field.size();
+        int totalCols = puzzleData.field.get(0).size();
+        int gameRows = totalRows -2; // Exclude top and bottom borders
+        int gameCols = totalCols - 2; // Exclude left and right borders
+
+        Map<String, String> newBorderColors = new HashMap<>();
+        Set<Position> newHoles = new HashSet<>();
+        List<MosaicPiece> piecesOnBoard = new ArrayList<>();
+        Field newField = new Field(gameRows, gameCols, newBorderColors, newHoles);
+
+        for (int r = 0; r < totalRows; r++) {
+            for (int c = 0; c < totalCols; c++) {
+                String patternFromFile = puzzleData.field.get(r).get(c);
+                boolean isBorder = (r == 0 || r == totalRows - 1 || c == 0 || c == totalCols - 1);
+
+                if (isBorder) {
+                    String key = deriveBorderKey(r, c, gameRows, gameCols);
+                    if (key != null) {
+                        String color = deriveColorFromBorderPattern(patternFromFile, key);
+                        newBorderColors.put(key, color);
+                    }
+                } else { // This is a game cell, not a border
+                    int gameR = r - 1; // Adjust for border rows
+                    int gameC = c - 1; // Adjust for border columns
+                    if (!patternFromFile.equals("NNNN")) {
+                        MosaicPiece orientedPiece = findCanonicalPieceForPattern(patternFromFile);
+
+                        if (orientedPiece != null) {
+                            newField.setPieceAt(gameR, gameC, orientedPiece);
+                            piecesOnBoard.add(orientedPiece);
+                        } else {
+                            System.err.println("Could not find a matching canonical piece for pattern: " + patternFromFile);
+                        }
+                    } else {
+                        // If the patternFromFile is "NNNN", it means this cell is empty
+                        newField.setPieceAt(gameR, gameC, null);
+                    }
+                }
+            }
+        }
+        this.gameField = newField;
+        this.currentBoardBorderColors = newBorderColors;
+        this.availablePieces = new ArrayList<>(this.allPuzzlePieces);
+        // Set available pieces by removing those already on the board
+        for (MosaicPiece pieceOnBoard : piecesOnBoard) {
+            this.availablePieces.removeIf(p -> p.getColorPattern().equals(pieceOnBoard.getColorPattern()));
+        }
+
+
+        gui.initializeBoardView(gameRows, gameCols, this.currentBoardBorderColors);
+        redrawFullBoardState();
+        updateAvailablePiecesInGUI();
+
+        boolean hasInvalidPlacements = piecesOnBoard.stream()
+                .anyMatch(p -> !checkPlacementValidity(p, p.getPlacementRow(), p.getPlacementCol()));
+
+        if (hasInvalidPlacements) {
+            this.isEditorMode = true;
+            gui.setEditorMode(true);
+            gui.showStatusMessage("Error: Loaded puzzle has invalid piece placements and cannot be played.");
+        } else if (isGameWon()) {
+            this.isEditorMode = false;
+            gui.setEditorMode(false);
+            gui.showGameEndMessage("Puzzle Solved!", "This puzzle was already solved upon loading.");
+        } else if (!isPuzzleSolvable()) {
+            this.isEditorMode = true;
+            gui.setEditorMode(true);
+            gui.showStatusMessage("Warning: Loaded puzzle is valid, but may not be solvable.");
+        } else {
+            this.isEditorMode = false;
+            gui.setEditorMode(false);
+            gui.showStatusMessage("Loaded playable puzzle. Continue!");
+        }
+    }
+
+    /**
+     * Finds the canonical (unrotated) piece that matches the given pattern from the file,
+     * and returns a new MosaicPiece object with the correct orientation set.
+     *
+     * @param patternFromFile The 4-character string pattern from the loaded JSON file.
+     * @return A new MosaicPiece with the correct base pattern and rotation, or null if no match is found.
+     */
+    private MosaicPiece findCanonicalPieceForPattern(String patternFromFile) {
+        // Iterate through each of the 24 master tiles
+        for (MosaicPiece canonicalPiece : this.allPuzzlePieces) {
+            // Try all 4 possible rotations for each tile
+            for (int orientation = 0; orientation < 360; orientation += 90) {
+                MosaicPiece tempPiece = new MosaicPiece(canonicalPiece.getColorPattern(), orientation);
+
+                // Build the effective pattern string for the current rotation
+                char n = tempPiece.getEdgeColor(Direction.NORTH);
+                char e = tempPiece.getEdgeColor(Direction.EAST);
+                char s = tempPiece.getEdgeColor(Direction.SOUTH);
+                char w = tempPiece.getEdgeColor(Direction.WEST);
+                String effectivePattern = "" + n + e + s + w;
+
+                // If the rotated pattern matches the pattern from the file, we found it!
+                if (effectivePattern.equals(patternFromFile)) {
+                    return tempPiece; // Return the piece with the correct canonical pattern and orientation
+                }
+            }
+        }
+        return null; // No matching piece was found
+    }
+
+    private String deriveColorFromBorderPattern(String pattern, String borderKey) {
+        char colorChar = 'N';
+        if (borderKey.startsWith("TOP")) colorChar = pattern.charAt(2); // South edge of top border
+        else if (borderKey.startsWith("BOTTOM")) colorChar = pattern.charAt(0); // North edge of bottom border
+        else if (borderKey.startsWith("LEFT")) colorChar = pattern.charAt(1); // East edge of left border
+        else if (borderKey.startsWith("RIGHT")) colorChar = pattern.charAt(3); // West edge of right border
+        return getColorStringFromChar(colorChar);
+    }
+
+    private String deriveBorderKey(int r, int c, int gameRows, int gameCols) {
+        if (r == 0 && c > 0 && c <= gameCols) return "TOP_" + (c - 1); // Top border
+        if (r == gameRows + 1 && c > 0 && c <= gameCols) return "BOTTOM_" + (c - 1); // Bottom border
+        if (c == 0 && r > 0 && r <= gameRows) return "LEFT_" + (r - 1); // Left border
+        if (c == gameCols + 1 && r > 0 && r <= gameRows) return "RIGHT_" + (r - 1); // Right border
+
+        return null; // It's a border
+    }
+
+    private void redrawFullBoardState() {
+        if (gameField == null) return;
+        for (int r = 0; r < gameField.getRows(); r++) {
+            for (int c = 0; c < gameField.getColumns(); c++) {
+                MosaicPiece piece = gameField.getPieceAt(r, c);
+                boolean isHole = gameField.isCellHole(r, c);
+                if (piece != null) {
+                    boolean isError = !checkPlacementValidity(piece, r, c);
+                    gui.updateGameCell(r, c, piece.getColorPattern(), piece.getColorPattern(),
+                            piece.getOrientation(), isError, false);
+                } else {
+                    gui.updateGameCell(r, c, null, null, 0, false, isHole);
+                }
+            }
+        }
+    }
+
     public Map<String, String> predefinedBorderColors() {
         Map<String, String> borderColors = new HashMap<>();
         // Example: Top border colors for a 4x3 puzzle
@@ -94,11 +267,109 @@ public class Game {
                 (currentHoles + 1) + " of " + requiredHoles + " holes placed.");
     }
 
+    /**
+     * Saves the current state of the puzzle to a file in the "instructor's format".
+     *
+     * @param file The file to save the puzzle to.
+     * @throws IOException If there is an error writing to the file.
+     */
+    public void saveGameToFile(File file) throws IOException {
+        // Create the main object that will be serialized to JSON
+        PuzzleFile saveData = new PuzzleFile();
+        saveData.field = new ArrayList<>();
+
+        int totalRows = gameField.getRows() + 2;
+        int totalCols = gameField.getColumns() + 2;
+
+        // Iterate over the entire grid, including borders, to build the 2D list
+        for (int r = 0; r < totalRows; r++) {
+            List<String> rowList = new ArrayList<>();
+            for (int c = 0; c < totalCols; c++) {
+                boolean isBorder = r == 0 || c == 0 || r == totalRows - 1 || c == totalCols - 1;
+                if (isBorder) {
+                    rowList.add(getPatternForBorderCell(r, c));
+                } else {
+                    rowList.add(getPatternForGameCell(r - 1, c - 1));
+                }
+            }
+            saveData.field.add(rowList);
+        }
+
+        // Use Gson to write the object to the file
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        try (Writer writer = new FileWriter(file)) {
+            gson.toJson(saveData, writer);
+        }
+    }
+
+    /**
+     * Helper method to get the 4-character pattern for a cell within the game area.
+     */
+    private String getPatternForGameCell(int gameRow, int gameCol) {
+        if (gameField.isCellHole(gameRow, gameCol)) {
+            return "NNNN";
+        }
+        MosaicPiece piece = gameField.getPieceAt(gameRow, gameCol);
+        if (piece == null) {
+            return "NNNN"; // Empty cell
+        }
+        // For a placed piece, calculate its effective pattern based on rotation
+        char n = piece.getEdgeColor(Direction.NORTH);
+        char e = piece.getEdgeColor(Direction.EAST);
+        char s = piece.getEdgeColor(Direction.SOUTH);
+        char w = piece.getEdgeColor(Direction.WEST);
+        return "" + n + e + s + w;
+    }
+
+    /**
+     * Helper method to get the 4-character pattern for a border or corner cell.
+     */
+    private String getPatternForBorderCell(int guiRow, int guiCol) {
+        int gameRows = gameField.getRows();
+        int gameCols = gameField.getColumns();
+        char n = 'N', e = 'N', s = 'N', w = 'N';
+
+        // Top border
+        if (guiRow == 0 && guiCol > 0 && guiCol <= gameCols) {
+            String color = currentBoardBorderColors.get("TOP_" + (guiCol - 1));
+            s = getCharFromColorString(color); // The south-facing edge of the top border
+        }
+        // Bottom border
+        else if (guiRow == gameRows + 1 && guiCol > 0 && guiCol <= gameCols) {
+            String color = currentBoardBorderColors.get("BOTTOM_" + (guiCol - 1));
+            n = getCharFromColorString(color); // The north-facing edge of the bottom border
+        }
+        // Left border
+        else if (guiCol == 0 && guiRow > 0 && guiRow <= gameRows) {
+            String color = currentBoardBorderColors.get("LEFT_" + (guiRow - 1));
+            e = getCharFromColorString(color); // The east-facing edge of the left border
+        }
+        // Right border
+        else if (guiCol == gameCols + 1 && guiRow > 0 && guiRow <= gameRows) {
+            String color = currentBoardBorderColors.get("RIGHT_" + (guiRow - 1));
+            w = getCharFromColorString(color); // The west-facing edge of the right border
+        }
+
+        // Corners and any other cells will default to "NNNN"
+        return "" + n + e + s + w;
+    }
+
+    /**
+     * Helper method to convert a color string ("RED") to a character ('R').
+     */
+    private char getCharFromColorString(String color) {
+        if (color == null) return 'N';
+        return switch (color.toUpperCase()) {
+            case "RED" -> 'R';
+            case "GREEN" -> 'G';
+            case "YELLOW" -> 'Y';
+            default -> 'N';
+        };
+    }
     public void startEditor(int newRows, int newCols) {
         this.isEditorMode = true;
         this.currentBoardBorderColors = new HashMap<>();
-        Set<Position> holes = new HashSet<>();
-        this.gameField = new Field(newRows, newCols, this.currentBoardBorderColors, holes);
+        this.gameField = new Field(newRows, newCols, this.currentBoardBorderColors, new HashSet<>());
 
         gui.initializeBoardView(newRows, newCols, this.currentBoardBorderColors);
         gui.displayAvailablePieces(Collections.emptyList()); // No pieces in editor mode
@@ -170,7 +441,7 @@ public class Game {
         this.availablePieces = availablePieces;
         this.allPuzzlePieces = allPuzzlePieces;
         this.currentBoardBorderColors = currentBoardBorderColors;
-        this.editorMode = false;
+//        this.editorMode = false;
     }
 
     public Game(GUIConnector gui) {
@@ -212,64 +483,127 @@ public class Game {
             gui.showStatusMessage("Cannot start game: Tile definitions are missing.");
             return;
         }
-
-        Map<String, String> borderColorsForGUI;
-        Set<Position> holesForField = Collections.emptySet(); // Default: no holes for 4x3
-
-        if (initialGameRows == 4 && initialGameColumns == 3) {
-            PredefinedPuzzle config = new PredefinedPuzzle(
-                    new String[]{"NNGN", "NNRN", "NNYN"}, // Top: Green, Red, Yellow (South edges of border pieces)
-                    new String[]{"GNNN", "RNNN", "YNNN"}, // Bottom: Green, Red, Yellow (North edges of border pieces)
-                    new String[]{"NRNN", "NGNN", "NYNN", "NRNN"}, // Left: Red, Green, Yellow, Red (East edges of border pieces)
-                    new String[]{"NNNY", "NNNG", "NNNY", "NNNY"}  // Right: Yellow, Green, Red, Yellow (West edges of border pieces)
-            );
-            borderColorsForGUI = config.getBorderColors(initialGameColumns, initialGameRows);
-            this.currentBoardBorderColors = borderColorsForGUI;
-//            System.out.println("DEBUG: Initialized currentBoardBorderColors: " + this.currentBoardBorderColors);
-//            System.out.println("Using predefined 4x3 puzzle configuration.");
-        } else {
-            // Handle non-default sizes: requires dynamic generation or more predefined puzzles.
-            // For now, create generic borders and warn about solvability.
-            gui.showStatusMessage("Warning: Using generic borders for " + initialGameRows + "x" + initialGameColumns + " size. Solvability not guaranteed.");
-            borderColorsForGUI = new HashMap<>(); // Placeholder: fill with some default (e.g., all RED)
-            for(int c = 0; c < initialGameColumns; c++) {
-                borderColorsForGUI.put("", "RED");
-                borderColorsForGUI.put("", "RED");
-            }
-
-            for(int r = 0; r < initialGameRows; r++) {
-                borderColorsForGUI.put("", "RED");
-                borderColorsForGUI.put("", "RED");
-            }
-
-            if ((initialGameRows * initialGameColumns) > 24) {
-                // TODO: Implement logic to add (rows * cols - 24) holes ensuring solvability.
-                // For now, no holes added.
-                gui.showStatusMessage("Field is larger than 24 cells; holes need to be implemented.");
-            }
-        }
-
-        // The Field's internal border representation. For now, it's null as Game handles border logic.
-        // If Field needed its own map, you'd convert/pass the chosen border config here.
-        this.gameField = new Field(initialGameRows, initialGameColumns, null, holesForField);
-
+        
+        this.isEditorMode = false;
+        this.currentBoardBorderColors = createDefaultBorderColors(initialGameRows, initialGameColumns);
+        this.gameField = new Field(initialGameRows, initialGameColumns, this.currentBoardBorderColors, new HashSet<>());
         this.availablePieces = new ArrayList<>(this.allPuzzlePieces);
-
+        
         gui.initializeBoardView(initialGameRows, initialGameColumns, this.currentBoardBorderColors);
-
-        List<String> pieceRepresentationsForGUI = new ArrayList<>();
-        for (MosaicPiece piece : this.availablePieces) {
-            pieceRepresentationsForGUI.add(piece.getColorPattern());
-        }
-        gui.displayAvailablePieces(pieceRepresentationsForGUI);
-
-        this.editorMode = false;
+        updateAvailablePiecesInGUI();
         gui.setEditorMode(false);
-        gui.showStatusMessage("New game started! " + availablePieces.size() + " pieces available.");
+        gui.showStatusMessage("Game started!" + availablePieces.size() + " pieces available.");
+
+//        Map<String, String> borderColorsForGUI;
+//        Set<Position> holesForField = Collections.emptySet(); // Default: no holes for 4x3
+//
+//        if (initialGameRows == 4 && initialGameColumns == 3) {
+//            PredefinedPuzzle config = new PredefinedPuzzle(
+//                    new String[]{"NNGN", "NNRN", "NNYN"}, // Top: Green, Red, Yellow (South edges of border pieces)
+//                    new String[]{"GNNN", "RNNN", "YNNN"}, // Bottom: Green, Red, Yellow (North edges of border pieces)
+//                    new String[]{"NRNN", "NGNN", "NYNN", "NRNN"}, // Left: Red, Green, Yellow, Red (East edges of border pieces)
+//                    new String[]{"NNNY", "NNNG", "NNNY", "NNNY"}  // Right: Yellow, Green, Red, Yellow (West edges of border pieces)
+//            );
+//            borderColorsForGUI = config.getBorderColors(initialGameColumns, initialGameRows);
+//            this.currentBoardBorderColors = borderColorsForGUI;
+////            System.out.println("DEBUG: Initialized currentBoardBorderColors: " + this.currentBoardBorderColors);
+////            System.out.println("Using predefined 4x3 puzzle configuration.");
+//        } else {
+//            // Handle non-default sizes: requires dynamic generation or more predefined puzzles.
+//            // For now, create generic borders and warn about solvability.
+//            gui.showStatusMessage("Warning: Using generic borders for " + initialGameRows + "x" + initialGameColumns + " size. Solvability not guaranteed.");
+//            borderColorsForGUI = new HashMap<>(); // Placeholder: fill with some default (e.g., all RED)
+//            for(int c = 0; c < initialGameColumns; c++) {
+//                borderColorsForGUI.put("", "RED");
+//                borderColorsForGUI.put("", "RED");
+//            }
+//
+//            for(int r = 0; r < initialGameRows; r++) {
+//                borderColorsForGUI.put("", "RED");
+//                borderColorsForGUI.put("", "RED");
+//            }
+//
+//            if ((initialGameRows * initialGameColumns) > 24) {
+//                // TODO: Implement logic to add (rows * cols - 24) holes ensuring solvability.
+//                // For now, no holes added.
+//                gui.showStatusMessage("Field is larger than 24 cells; holes need to be implemented.");
+//            }
+//        }
+//
+//        // The Field's internal border representation. For now, it's null as Game handles border logic.
+//        // If Field needed its own map, you'd convert/pass the chosen border config here.
+//        this.gameField = new Field(initialGameRows, initialGameColumns, null, holesForField);
+//
+//        this.availablePieces = new ArrayList<>(this.allPuzzlePieces);
+//
+//        gui.initializeBoardView(initialGameRows, initialGameColumns, this.currentBoardBorderColors);
+//
+//        List<String> pieceRepresentationsForGUI = new ArrayList<>();
+//        for (MosaicPiece piece : this.availablePieces) {
+//            pieceRepresentationsForGUI.add(piece.getColorPattern());
+//        }
+//        gui.displayAvailablePieces(pieceRepresentationsForGUI);
+//
+//        this.editorMode = false;
+//        gui.setEditorMode(false);
+//        gui.showStatusMessage("New game started! " + availablePieces.size() + " pieces available.");
 
         // if (!checkSolvability()) { // Should be true if using a good predefined puzzle
         //     gui.showStatusMessage("Error: Puzzle may not be solvable!");
         // }
+    }
+
+    /**
+     * Creates a list of color patterns from the currently available pieces
+     * and tells the GUI to display them.
+     */
+    private void updateAvailablePiecesInGUI() {
+        List<String> pieceRepresentationsForGUI = new ArrayList<>();
+        if (this.availablePieces != null) {
+            for (MosaicPiece piece : this.availablePieces) {
+                pieceRepresentationsForGUI.add(piece.getColorPattern());
+            }
+        }
+        gui.displayAvailablePieces(pieceRepresentationsForGUI);
+    }
+
+    /**
+     * Creates the border color map for a given board size.
+     * For a 4x3 board, it returns the predefined solvable puzzle borders.
+     * For other sizes, it returns a generic map and relies on the editor.
+     *
+     * @param rows The number of rows for the game board.
+     * @param cols The number of columns for the game board.
+     * @return A Map representing the border colors.
+     */
+    private Map<String, String> createDefaultBorderColors(int rows, int cols) {
+        if (rows == 4 && cols == 3) {
+            class PredefinedPuzzle {
+                final String[] top, bottom, left, right;
+                PredefinedPuzzle(String[] t, String[] b, String[] l, String[] r) {
+                    top = t; bottom = b; left = l; right = r;
+                }
+                Map<String, String> getBorderColors(int numCols, int numRows) {
+                    Map<String, String> borderMap = new HashMap<>();
+                    for (int c = 0; c < numCols; c++) borderMap.put("TOP_" + c, getColorStringFromChar(top[c].charAt(2)));
+                    for (int c = 0; c < numCols; c++) borderMap.put("BOTTOM_" + c, getColorStringFromChar(bottom[c].charAt(0)));
+                    for (int r = 0; r < numRows; r++) borderMap.put("LEFT_" + r, getColorStringFromChar(left[r].charAt(1)));
+                    for (int r = 0; r < numRows; r++) borderMap.put("RIGHT_" + r, getColorStringFromChar(right[r].charAt(3)));
+                    return borderMap;
+                }
+            }
+            PredefinedPuzzle config = new PredefinedPuzzle(
+                    new String[]{"NNGN", "NNRN", "NNYN"},
+                    new String[]{"GNNN", "RNNN", "YNNN"},
+                    new String[]{"NRNN", "NGNN", "NYNN", "NRNN"},
+                    new String[]{"NNNY", "NNNG", "NNNY", "NNNY"}
+            );
+            return config.getBorderColors(cols, rows);
+        } else {
+            // For non-default sizes, return an empty map as borders will be set in the editor.
+            gui.showStatusMessage("Warning: Using generic empty borders for " + rows + "x" + cols + " size. Please define in Editor Mode.");
+            return new HashMap<>();
+        }
     }
 
     private PredefinedPuzzle getSolvableConfig() {
@@ -468,7 +802,7 @@ public class Game {
     }
 
     public void switchToEditorMode() {
-        this.editorMode = true;
+//        this.editorMode = true;
         clearBoard();
         gui.setEditorMode(true);
         gui.showStatusMessage("Switched to Editor Mode. You can now edit the game board.");
@@ -592,10 +926,6 @@ public class Game {
     public boolean loadGame(String filePath) {
         // Placeholder for load game logic
         return true;
-    }
-
-    public void toggleEditorMode() {
-        this.editorMode = !this.editorMode;
     }
 
 
@@ -774,6 +1104,18 @@ public class Game {
         };
     }
 
+    private String getColorStringFromChar(char c) {
+        return switch (c) {
+            case 'R' -> "RED";
+            case 'G' -> "GREEN";
+            case 'Y' -> "YELLOW";
+            case 'N' -> "NONE"; // No color
+            default -> {
+                System.err.println("Game.PredefinedPuzzle: Unexpected character '" + c + "' in border pattern. Defaulting to NONE.");
+                yield "NONE"; // Default for any unexpected char
+            }
+        };
+    }
     /**
      * The main recursive backtracking method to find a valid solution.
      *

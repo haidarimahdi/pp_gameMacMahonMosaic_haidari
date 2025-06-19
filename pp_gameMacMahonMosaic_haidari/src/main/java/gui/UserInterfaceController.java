@@ -2,6 +2,7 @@ package gui;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -508,48 +509,39 @@ public class UserInterfaceController implements Initializable {
 
     @FXML void handleSaveGame(ActionEvent event) {
         if (guiConnector != null) guiConnector.showStatusMessage("Save action...");
-        if (!game.isEditorMode()) {
-            guiConnector.showStatusMessage("Save is only available in Editor Mode.");
-            return;
-        }
+
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Puzzle");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
         File file = fileChooser.showSaveDialog(menuBar.getScene().getWindow());
 
         if (file != null) {
-            PuzzleConfiguration config = game.getPuzzleConfiguration();
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            try (FileWriter writer = new FileWriter(file)) {
-                gson.toJson(config, writer);
-                guiConnector.showStatusMessage("Puzzle saved to " + file.getName());
+            try {
+                // Delegate all file writing and data formatting to the Game class.
+                game.saveGameToFile(file);
+                guiConnector.showStatusMessage("Puzzle saved successfully to " + file.getName());
             } catch (IOException e) {
-                // Handle IO Exception
+                // Catch file writing errors and show a message.
+                guiConnector.showStatusMessage("Error: Could not save file. " + e.getMessage());
             }
         }
     }
-    // handleLoadGame would be similar but would read the file, deserialize the JSON
-    // using gson.fromJson(), and then call game.loadPuzzleFromConfiguration(config).
 
     @FXML void handleLoadGame(ActionEvent event) {
         if (guiConnector != null) guiConnector.showStatusMessage("Load action...");
-        if (!game.isEditorMode()) {
-            guiConnector.showStatusMessage("Load is only available in Editor Mode.");
-            return;
-        }
+
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Load Puzzle");
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
         File file = fileChooser.showOpenDialog(menuBar.getScene().getWindow());
         if (file != null) {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
             try {
-                PuzzleConfiguration config = gson.fromJson(new java.io.FileReader(file), PuzzleConfiguration.class);
-                game.loadPuzzleFromConfiguration(config);
-                guiConnector.showStatusMessage("Puzzle loaded from " + file.getName());
-            } catch (IOException e) {
+                game.loadGameFromFile(file);
+                menuEditorMode.setSelected(game.isEditorMode());
+                hintButton.setDisable(game.isEditorMode());
+            } catch (JsonSyntaxException e) {
                 guiConnector.showStatusMessage("Failed to load puzzle: " + e.getMessage());
-            } catch (Exception e) {
+            } catch (IOException  e) {
                 guiConnector.showStatusMessage("Error loading puzzle: " + e.getMessage());
             }
         }
@@ -565,13 +557,16 @@ public class UserInterfaceController implements Initializable {
 
         if (activateEditor) {
             showBoardConfigurationDialog();
+            hintButton.setDisable(true);
             guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
         } else {
             if (game.isPuzzleReadyToPlay()) {
                 game.switchToGameMode();
+                hintButton.setDisable(false);
                 guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
             } else {
                 menuEditorMode.setSelected(true); // Revert the toggle
+                guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
             }
         }
     }

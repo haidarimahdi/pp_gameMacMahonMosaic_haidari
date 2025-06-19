@@ -3,6 +3,8 @@ package logic;
 public class MosaicPiece {
     private final String colorPattern;
     private int orientation; // 0, 90, 180, 270 degrees clockwise
+    private int row = -1; // Default value indicating not placed
+    private int col = -1; // Default value indicating not placed
 
     public MosaicPiece(String colorPattern, int orientation) {
         this.colorPattern = colorPattern;
@@ -41,5 +43,17 @@ public char getEdgeColor(Direction direction) {
 
     public int getOrientation() {
         return orientation;
+    }
+
+    public void setPlacement(int row, int col) {
+        this.row = row;
+        this.col = col;
+    }
+
+    public int getPlacementRow() {
+        return row;
+    }
+    public int getPlacementCol() {
+        return col;
     }
 }
