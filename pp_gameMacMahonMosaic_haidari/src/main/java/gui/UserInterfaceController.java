@@ -496,8 +496,35 @@ public class UserInterfaceController implements Initializable {
                 }
             });
         });
-
     }
+
+    private enum ConfirmationResult {
+        SAVE, DONT_SAVE, CANCEL
+    }
+
+    private ConfirmationResult showUnsavedChangesDialog(String title, String content) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle(title);
+        alert.setHeaderText("You have unsaved changes.");
+        alert.setContentText(content);
+
+        ButtonType buttonTypeSave = new ButtonType("Save");
+        ButtonType buttonTypeDontSave = new ButtonType("Don't Save");
+        ButtonType buttonTypeCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(buttonTypeSave, buttonTypeDontSave, buttonTypeCancel);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent()) {
+            if (result.get() == buttonTypeSave) {
+                return ConfirmationResult.SAVE;
+            } else if (result.get() == buttonTypeDontSave) {
+                return ConfirmationResult.DONT_SAVE;
+            }
+        }
+        return ConfirmationResult.CANCEL;
+    }
+
     @FXML
     void handleRotateSelectedPiece(ActionEvent event) {
         if (guiConnector != null) {
@@ -511,18 +538,57 @@ public class UserInterfaceController implements Initializable {
 
     @FXML void handleRestartPuzzle(ActionEvent event) {
         if (game != null) {
-            game.restartGame();
-        }
-
-        Platform.runLater(() -> {
-            if (boardWrapperPane != null) {
-                adjustBoardGridPaneSize(boardWrapperPane.getWidth(), boardWrapperPane.getHeight());
+            if (game.isDirty()) {
+                ConfirmationResult result = showUnsavedChangesDialog(
+                        "Restart Puzzle",
+                        "Do you want to save your changes before restarting?");
+                switch (result) {
+                    case SAVE:
+                        handleSaveGame(null); // Save the game
+                        game.restartGame(); // Restart after saving
+                        break;
+                    case DONT_SAVE:
+                        game.restartGame();
+                        break;
+                    case CANCEL:
+                        break; // User cancelled the action
+                }
+            } else {
+                game.restartGame();
             }
-        });
 
+            Platform.runLater(() -> {
+                menuEditorMode.setSelected(game.isEditorMode());
+                hintButton.setDisable(game.isEditorMode());
+                availablePiecesScrollPane.setDisable(game.isEditorMode());
+                if (boardWrapperPane != null) {
+                    adjustBoardGridPaneSize(boardWrapperPane.getWidth(), boardWrapperPane.getHeight());
+                }
+            });
+        }
     }
 
-    @FXML void handleExitGame(ActionEvent event) { Platform.exit(); }
+    @FXML void handleExitGame(ActionEvent event) {
+        if (game.isDirty()) {
+            ConfirmationResult result = showUnsavedChangesDialog(
+                    "Exit Game",
+                    "Do you want to save your changes before exiting?");
+            switch (result) {
+                case SAVE:
+                    handleSaveGame(null); // Save the game
+                    Platform.exit(); // Exit after saving
+                    break;
+                case DONT_SAVE:
+                    Platform.exit(); // Exit without saving
+                    break;
+                case CANCEL:
+                    break; // User cancelled the action, do nothing
+            }
+        } else {
+            // No unsaved changes, exit directly
+            Platform.exit();
+        }
+    }
 
     @FXML void handleSaveGame(ActionEvent event) {
         if (guiConnector != null) guiConnector.showStatusMessage("Save action...");
@@ -555,7 +621,14 @@ public class UserInterfaceController implements Initializable {
             try {
                 game.loadGameFromFile(file);
                 menuEditorMode.setSelected(game.isEditorMode());
+                availablePiecesScrollPane.setDisable(false);
                 hintButton.setDisable(game.isEditorMode());
+
+                Platform.runLater(() -> {
+                    if (boardWrapperPane != null) {
+                        adjustBoardGridPaneSize(boardWrapperPane.getWidth(), boardWrapperPane.getHeight());
+                    }
+                });
             } catch (JsonSyntaxException e) {
                 guiConnector.showStatusMessage("Failed to load puzzle: " + e.getMessage());
             } catch (IOException  e) {
@@ -570,16 +643,85 @@ public class UserInterfaceController implements Initializable {
             return;
         }
 
+//        if (game.isEditorMode()) {
+////            game.restartGame();
+//            menuEditorMode.setSelected(false);
+//            hintButton.setDisable(false);
+//        } else {
+//            // If we are in game mode and want to activate the editor
+//            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+//            alert.setTitle("Enter Editor Mode");
+//            alert.setHeaderText("What would you like to edit?");
+//
+//            ButtonType btnEditCurrentPuzzle = new ButtonType("Edit Current Puzzle");
+//            ButtonType btnCreateNewPuzzle = new ButtonType("Create New Puzzle");
+//            alert.getButtonTypes().setAll(btnEditCurrentPuzzle, btnCreateNewPuzzle, ButtonType.CANCEL);
+//
+//            Optional<ButtonType> result = alert.showAndWait();
+//            result.ifPresent(buttonType -> {
+//                if (buttonType == btnEditCurrentPuzzle) {
+//                    game.editCurrentPuzzle();
+//                    menuEditorMode.setSelected(true);
+//                } else if (buttonType == btnCreateNewPuzzle) {
+//                    handleRestartPuzzle(null);
+//                    showBoardConfigurationDialog();
+//                    menuEditorMode.setSelected(true);
+//                } else {
+//                    menuEditorMode.setSelected(false);
+//                }
+//            });
+//            if (result.isEmpty()) {
+//                menuEditorMode.setSelected(false);
+//            }
+//        }
+//    }
+
         boolean activateEditor = menuEditorMode.isSelected();
 
         if (activateEditor) {
-            showBoardConfigurationDialog();
-            hintButton.setDisable(true);
-            guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
+//            showBoardConfigurationDialog();
+//            hintButton.setDisable(true);
+//            guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Enter Editor Mode");
+            alert.setHeaderText("What would you like to edit?");
+
+            ButtonType btnEditCurrentPuzzle = new ButtonType("Edit Current Puzzle");
+            ButtonType btnCreateNewPuzzle = new ButtonType("Create New Puzzle");
+            alert.getButtonTypes().setAll(btnEditCurrentPuzzle, btnCreateNewPuzzle, ButtonType.CANCEL);
+
+            Optional<ButtonType> result = alert.showAndWait();
+            result.ifPresent(buttonType -> {
+                if (buttonType == btnEditCurrentPuzzle) {
+//                    hintButton.setDisable(true);
+//                    availablePiecesScrollPane.setDisable(true);
+                    game.editCurrentPuzzle();
+//                    menuEditorMode.setSelected(true);
+//                    guiConnector.showStatusMessage("Puzzle edited successfully.");
+                } else if (buttonType == btnCreateNewPuzzle) {
+//                    hintButton.setDisable(true);
+//                    availablePiecesScrollPane.setDisable(true);
+//                    handleRestartPuzzle(null);
+                    showBoardConfigurationDialog();
+//                    menuEditorMode.setSelected(true);
+                } else {
+                    menuEditorMode.setSelected(false);
+                    return;
+                }
+                hintButton.setDisable(true);
+                availablePiecesScrollPane.setDisable(true);
+                guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
+            });
+            if (result.isEmpty()) {
+                menuEditorMode.setSelected(false);
+//                hintButton.setDisable(false);
+//                availablePiecesScrollPane.setDisable(false);
+            }
         } else {
             if (game.isPuzzleReadyToPlay()) {
                 game.switchToGameMode();
                 hintButton.setDisable(false);
+                availablePiecesScrollPane.setDisable(false);
                 guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
             } else {
                 menuEditorMode.setSelected(true); // Revert the toggle
