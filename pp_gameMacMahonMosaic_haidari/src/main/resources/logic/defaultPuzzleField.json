@@ -1,0 +1,46 @@
+{
+  "field": [
+    [
+      "NNNN",
+      "NNGN",
+      "NNRN",
+      "NNYN",
+      "NNNN"
+    ],
+    [
+      "NRNN",
+      "NNNN",
+      "NNNN",
+      "NNNN",
+      "NNNY"
+    ],
+    [
+      "NGNN",
+      "NNNN",
+      "NNNN",
+      "NNNN",
+      "NNNG"
+    ],
+    [
+      "NYNN",
+      "NNNN",
+      "NNNN",
+      "NNNN",
+      "NNNY"
+    ],
+    [
+      "NRNN",
+      "NNNN",
+      "NNNN",
+      "NNNN",
+      "NNNY"
+    ],
+    [
+      "NNNN",
+      "GNNN",
+      "RNNN",
+      "YNNN",
+      "NNNN"
+    ]
+  ]
+}

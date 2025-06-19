@@ -27,6 +27,7 @@ import javax.swing.text.html.Option;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.*;
 
@@ -114,7 +115,23 @@ public class UserInterfaceController implements Initializable {
         this.game = new Game(this.guiConnector);
         // Initialize the game via Game class
         // This will trigger calls to guiConnector.initializeBoardView(), etc.
-        game.startGame(INITIAL_GAME_ROWS, INITIAL_GAME_COLUMNS);
+        try {
+            URL puzzleResource = Game.class.getResource("/logic/defaultPuzzleField.json");
+            if (puzzleResource == null) {
+                throw new IOException("Cannot find default puzzle file.");
+            }
+
+            File puzzleFile = new File(puzzleResource.toURI());
+            game.loadGameFromFile(puzzleFile);
+        } catch (IOException | URISyntaxException | JsonSyntaxException e) {
+            e.printStackTrace();
+            guiConnector.showStatusMessage("CRITICAL ERROR: Could not load default puzzle." + e.getMessage());
+        }
+
+        menuEditorMode.setSelected(game.isEditorMode());
+        hintButton.setDisable(game.isEditorMode());
+
+        addResizingListeners();
 
         if (boardGridPane != null) {
             boardGridPane.setOnMouseClicked(event -> {
