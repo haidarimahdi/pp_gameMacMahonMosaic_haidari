@@ -473,19 +473,8 @@ public class JavaFXGUI implements GUIConnector {
         return newRotation;
     }
 
-
     @Override
     public void setEditorMode(boolean isEditorMode) {
-        Platform.runLater(() -> {
-            // Example: change background or enable/disable certain controls
-            if (isEditorMode) {
-                // boardGrid.setStyle("-fx-background-color: #FFE0B2;"); // Light orange for editor
-                showStatusMessage("Editor Mode Active");
-            } else {
-                // boardGrid.setStyle("-fx-background-color: #CDCDCD;"); // Default game background
-                showStatusMessage("Game Mode Active");
-            }
-        });
     }
 
     @Override
@@ -495,19 +484,19 @@ public class JavaFXGUI implements GUIConnector {
 
     @Override
     public void highlightCell(int row, int column, String colorPattern) {
-        Platform.runLater(() -> {
-            Node cellNode = getNodeByRowColumnIndex(row + 1, column + 1, boardGridPane);
-            if (cellNode != null) {
-                // Apply a background color based on the colorPattern
-                Color highlightColor = switch (colorPattern.toUpperCase()) {
-                    case "RED" -> Color.RED;
-                    case "GREEN" -> Color.GREEN;
-                    case "YELLOW" -> Color.YELLOW;
-                    default -> Color.LIGHTGRAY; // Fallback color
-                };
-                cellNode.setStyle("-fx-border-color: black; -fx-border-width: 2px;");
-            }
-        });
+//        Platform.runLater(() -> {
+//            Node cellNode = getNodeByRowColumnIndex(row + 1, column + 1, boardGridPane);
+//            if (cellNode != null) {
+//                // Apply a background color based on the colorPattern
+//                Color highlightColor = switch (colorPattern.toUpperCase()) {
+//                    case "RED" -> Color.RED;
+//                    case "GREEN" -> Color.GREEN;
+//                    case "YELLOW" -> Color.YELLOW;
+//                    default -> Color.LIGHTGRAY; // Fallback color
+//                };
+//                cellNode.setStyle("-fx-border-color: black; -fx-border-width: 2px;");
+//            }
+//        });
     }
 
     @Override

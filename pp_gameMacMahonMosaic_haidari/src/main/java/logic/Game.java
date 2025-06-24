@@ -120,19 +120,15 @@ public class Game {
 
         if (hasInvalidPlacements) {
             this.isEditorMode = true;
-            gui.setEditorMode(true);
             gui.showStatusMessage("Error: Loaded puzzle has invalid piece placements and cannot be played.");
         } else if (isGameWon()) {
             this.isEditorMode = false;
-            gui.setEditorMode(false);
             gui.showGameEndMessage("Puzzle Solved!", "This puzzle was already solved upon loading.");
         } else if (!isPuzzleSolvable()) {
             this.isEditorMode = true;
-            gui.setEditorMode(true);
             gui.showStatusMessage("Warning: Loaded puzzle is valid, but may not be solvable.");
         } else {
             this.isEditorMode = false;
-            gui.setEditorMode(false);
             gui.showStatusMessage("Loaded playable puzzle. Continue!");
         }
     }
@@ -362,7 +358,6 @@ public class Game {
 
         gui.initializeBoardView(newRows, newCols, this.currentBoardBorderColors);
         gui.displayAvailablePieces(Collections.emptyList()); // No pieces in editor mode
-        gui.setEditorMode(true);
     }
 
     // Helper record for predefined puzzle configurations for testing
@@ -561,6 +556,26 @@ public class Game {
     }
 
     /**
+     * Creates a piece from panel data and attempts to place it on the board.
+     * This contains the logic for interpreting UI data, which previously was in the controller.
+     *
+     * @param pattern The color pattern of the piece.
+     * @param rotationDegrees The rotation applied in the UI panel.
+     * @param gameRow The target row for placement.
+     * @param gameCol The target column for placement.
+     */
+    public void attemptPlacePieceFromPanel(String pattern, double rotationDegrees, int gameRow, int gameCol) {
+        // Create the piece and apply the correct number of rotations
+        MosaicPiece pieceToPlace = new MosaicPiece(pattern);
+        int numRotations = (int) (Math.round(rotationDegrees) / 90.0);
+        for (int i = 0; i < numRotations; i++) {
+            pieceToPlace.rotate();
+        }
+
+        attemptPlacePiece(pieceToPlace, gameRow, gameCol);
+
+    }
+    /**
      * Removes a piece from the specified cell on the game field and returns it
      * to the list of available pieces. Updates the GUI accordingly.
      *
@@ -653,7 +668,6 @@ public class Game {
     public void switchToEditorMode() {
 //        this.editorMode = true;
         clearBoard();
-        gui.setEditorMode(true);
         gui.showStatusMessage("Switched to Editor Mode. You can now edit the game board.");
     }
 
@@ -662,13 +676,12 @@ public class Game {
 
         this.availablePieces = new ArrayList<>(this.allPuzzlePieces); // Reset available pieces to all
 
-        clearBoard();
+//        clearBoard();
 
         List<String> pieceRepresentationsForGUI = new ArrayList<>();
         for (MosaicPiece piece : this.availablePieces) {
             pieceRepresentationsForGUI.add(piece.getColorPattern());
         }
-        gui.setEditorMode(false);
         gui.displayAvailablePieces(pieceRepresentationsForGUI);
         gui.showStatusMessage("Switched to Game Mode. You can now play the game.");
     }
@@ -678,12 +691,20 @@ public class Game {
             gui.showStatusMessage("Error: Game field is not initialized.");
             return false;
         }
+        System.out.println("Checking if puzzle is ready to play...");
+        System.out.println("Number of culumns and rows: " + gameField.getColumns() + "x" + gameField.getRows());
 
         for (int c = 0; c < gameField.getColumns(); c++) {
             // Check TOP border
-            if (isBorderSegmentValid("TOP_" + c)) return false;
+            if (isBorderSegmentValid("TOP_" + c)) {
+                System.out.println("TOP border segment " + c + " is valid.");
+                return false;
+            }
             // Check BOTTOM border
-            if (isBorderSegmentValid("BOTTOM_" + c)) return false;
+            if (isBorderSegmentValid("BOTTOM_" + c)) {
+                System.out.println("BOTTOM border segment " + c + " is valid.");
+                return false;
+            }
         }
 
         for (int r = 0; r < gameField.getRows(); r++) {
@@ -702,6 +723,7 @@ public class Game {
                 return false;
             }
         }
+        System.out.println("Game is almost ready to play, checking placements...");
     if (!isPuzzleSolvable()) {
             gui.showStatusMessage("Error: The current puzzle configuration is not solvable.");
             return false;
@@ -721,19 +743,18 @@ public class Game {
         String color = currentBoardBorderColors.get(borderKey);
         boolean isColorMissing = (color == null || color.isEmpty() || color.equals("NONE"));
 
-        if (!isColorMissing) {
-            return true; // Color is present, segment is valid.
-        }
-
-        // Color is missing, check if the adjacent cell is a hole.
         Position adjacentCell = getAdjacentCellForBorderKey(borderKey);
         if (adjacentCell != null && gameField.isCellHole(adjacentCell.row(), adjacentCell.column())) {
-            return true; // Color is missing, but it's next to a hole, so it's valid.
+            return false;
+        }
+
+        if (!isColorMissing) {
+            return false; // Color is present, segment is valid.
         }
 
         // Color is missing and it's not next to a hole. Invalid.
         gui.showStatusMessage("Error: Border segment " + borderKey + " needs a color.");
-        return false;
+        return true;
     }
 
     /**
@@ -1047,7 +1068,7 @@ public class Game {
                     gui.showStatusMessage("Hint: Place piece '" + hintPiece.getColorPattern() + "' at (" +
                             hintPosition.row() + "," + hintPosition.column() + ").");
                     attemptPlacePiece(hintPiece, hintPosition.row(), hintPosition.column());
-                    gui.highlightCell(hintPosition.row(), hintPosition.column(), hintPiece.getColorPattern());
+//                    gui.highlightCell(hintPosition.row(), hintPosition.column(), hintPiece.getColorPattern());
                 } else {
                     gui.showStatusMessage("No valid hint available for the next empty cell.");
                 }
@@ -1057,14 +1078,9 @@ public class Game {
 
     public void editCurrentPuzzle() {
         this.isEditorMode = true;
-        gui.setEditorMode(true);
-//        gui.showStatusMessage("Editing current puzzle. You can now modify the game board.");
-        // Clear the board and reset available pieces to allPuzzlePieces
         clearBoard();
         this.availablePieces = new ArrayList<>(this.allPuzzlePieces);
         updateAvailablePiecesInGUI(); // Refresh the available pieces in the GUI
-//        gui.clearCellHighlights(); // Clear any previous highlights
-//        gui.showStatusMessage("You can now edit the game board. Use the available pieces to fill the cells.");
     }
 
     public List<MosaicPiece> getAvailablePieces() {

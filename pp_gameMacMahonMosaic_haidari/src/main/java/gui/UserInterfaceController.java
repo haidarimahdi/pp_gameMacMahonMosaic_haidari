@@ -1,31 +1,20 @@
 package gui;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
-import javafx.geometry.HPos;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.geometry.VPos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle;
 import javafx.stage.FileChooser;
 import javafx.util.Pair;
 import logic.*;
 
-import javax.swing.text.html.Option;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -79,6 +68,7 @@ public class UserInterfaceController implements Initializable {
     @FXML
     private Label statusLabel;
 
+    private ButtonType editCurrentPuzzleBtn, createNewPuzzleBtn;
     // Default dimensions for the game board
 //    private int currentNumCols = 3;
 //    private int currentNumRows = 4;
@@ -88,6 +78,7 @@ public class UserInterfaceController implements Initializable {
     private static final int INITIAL_GAME_COLUMNS = 3;
     private static final double BORDER_PROPORTION_IN_CONTROLLER = 0.25; // For adjustGridPaneSize
     private boolean isResizing = false;
+    boolean isPuzzleConfigured;
 
 
     private Game game;
@@ -283,16 +274,12 @@ public class UserInterfaceController implements Initializable {
 
 
         if (selectedDataFromPanel != null) {
-
-            // --- A piece IS selected from the panel: Attempt to PLACE it ---
-            MosaicPiece pieceToPlace = new MosaicPiece(selectedDataFromPanel.pattern());
-            int numRotations = (int) (Math.round(selectedDataFromPanel.rotationDegrees()) / 90.0);
-            for (int i = 0; i < numRotations; i++) {
-                pieceToPlace.rotate();
-            }
-
-            game.attemptPlacePiece(pieceToPlace, gameLogicRow, gameLogicCol); // This method will check if the cell is empty
-
+            game.attemptPlacePieceFromPanel(
+                    selectedDataFromPanel.pattern(),
+                    selectedDataFromPanel.rotationDegrees(),
+                    gameLogicRow,
+                    gameLogicCol
+            );
         } else {
             // --- NO piece selected from the panel: Check if we should attempt to REMOVE a piece ---
             // Only attempt to remove if the clicked cell is actually occupied (and not a hole)
@@ -416,16 +403,15 @@ public class UserInterfaceController implements Initializable {
                         region.setPrefSize(actualGameCellVisualSize, actualGameCellVisualSize);
                         region.setMaxSize(actualGameCellVisualSize, actualGameCellVisualSize);
                     }
-                    // Border cells (the Panes created in JavaFXGUI) will automatically size
-                    // to fill the space allocated by their percentage constraints.
-                    // Their thickness will be BORDER_PROPORTION_FOR_CONSTRAINTS * effectiveUnitSize.
                 }
             }
         } finally {
             isResizing = false;
         }
     }
+
     private void showBoardConfigurationDialog() {
+        isPuzzleConfigured = false;
         Dialog<Pair<Integer, Integer>> dialog = new Dialog<>();
         dialog.setTitle("Configure Puzzle Board");
         dialog.setHeaderText("Enter the number of rows and columns for the puzzle board:");
@@ -466,14 +452,16 @@ public class UserInterfaceController implements Initializable {
                         return new Pair<>(rows, cols);
                     } else {
                         // Handle invalid dimensions
-                        Alert alert = new Alert(Alert.AlertType.ERROR, "Rows and columns must be between 2 and 6.", ButtonType.OK);
+                        Alert alert = new Alert(Alert.AlertType.ERROR,
+                                "Rows and columns must be between 2 and 6.",ButtonType.OK);
                         alert.setTitle("Invalid Dimensions");
                         alert.showAndWait();
                         return null; // Cancelled or invalid input
                     }
                 } catch (NumberFormatException e) {
                     // Handle invalid input
-                    Alert alert = new Alert(Alert.AlertType.ERROR, "Please enter valid integers for rows and columns.", ButtonType.OK);
+                    Alert alert = new Alert(Alert.AlertType.ERROR,
+                            "Please enter valid integers for rows and columns.", ButtonType.OK);
                     alert.setTitle("Invalid Input");
                     alert.showAndWait();
                 }
@@ -486,6 +474,8 @@ public class UserInterfaceController implements Initializable {
         result.ifPresent(dimensions -> {
             int newRows = dimensions.getKey();
             int newCols = dimensions.getValue();
+
+            isPuzzleConfigured = true;
 
             game.startEditor(newRows, newCols); // Start editor mode with new dimensions
 
@@ -637,98 +627,104 @@ public class UserInterfaceController implements Initializable {
         }
 
     }
-    @FXML void handleToggleEditorMode(ActionEvent event) {
+
+    @FXML void handleEditorMode(ActionEvent event) {
         if (game == null) {
             guiConnector.showStatusMessage("Game not initialized. Cannot toggle editor mode.");
             return;
         }
 
-//        if (game.isEditorMode()) {
-////            game.restartGame();
-//            menuEditorMode.setSelected(false);
-//            hintButton.setDisable(false);
-//        } else {
-//            // If we are in game mode and want to activate the editor
-//            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-//            alert.setTitle("Enter Editor Mode");
-//            alert.setHeaderText("What would you like to edit?");
-//
-//            ButtonType btnEditCurrentPuzzle = new ButtonType("Edit Current Puzzle");
-//            ButtonType btnCreateNewPuzzle = new ButtonType("Create New Puzzle");
-//            alert.getButtonTypes().setAll(btnEditCurrentPuzzle, btnCreateNewPuzzle, ButtonType.CANCEL);
-//
-//            Optional<ButtonType> result = alert.showAndWait();
-//            result.ifPresent(buttonType -> {
-//                if (buttonType == btnEditCurrentPuzzle) {
-//                    game.editCurrentPuzzle();
-//                    menuEditorMode.setSelected(true);
-//                } else if (buttonType == btnCreateNewPuzzle) {
-//                    handleRestartPuzzle(null);
-//                    showBoardConfigurationDialog();
-//                    menuEditorMode.setSelected(true);
-//                } else {
-//                    menuEditorMode.setSelected(false);
-//                }
-//            });
-//            if (result.isEmpty()) {
-//                menuEditorMode.setSelected(false);
-//            }
-//        }
-//    }
-
-        boolean activateEditor = menuEditorMode.isSelected();
-
-        if (activateEditor) {
-//            showBoardConfigurationDialog();
-//            hintButton.setDisable(true);
-//            guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Enter Editor Mode");
-            alert.setHeaderText("What would you like to edit?");
-
-            ButtonType btnEditCurrentPuzzle = new ButtonType("Edit Current Puzzle");
-            ButtonType btnCreateNewPuzzle = new ButtonType("Create New Puzzle");
-            alert.getButtonTypes().setAll(btnEditCurrentPuzzle, btnCreateNewPuzzle, ButtonType.CANCEL);
-
-            Optional<ButtonType> result = alert.showAndWait();
-            result.ifPresent(buttonType -> {
-                if (buttonType == btnEditCurrentPuzzle) {
-//                    hintButton.setDisable(true);
-//                    availablePiecesScrollPane.setDisable(true);
-                    game.editCurrentPuzzle();
-//                    menuEditorMode.setSelected(true);
-//                    guiConnector.showStatusMessage("Puzzle edited successfully.");
-                } else if (buttonType == btnCreateNewPuzzle) {
-//                    hintButton.setDisable(true);
-//                    availablePiecesScrollPane.setDisable(true);
-//                    handleRestartPuzzle(null);
-                    showBoardConfigurationDialog();
-//                    menuEditorMode.setSelected(true);
-                } else {
-                    menuEditorMode.setSelected(false);
-                    return;
-                }
-                hintButton.setDisable(true);
-                availablePiecesScrollPane.setDisable(true);
-                guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
-            });
-            if (result.isEmpty()) {
-                menuEditorMode.setSelected(false);
-//                hintButton.setDisable(false);
-//                availablePiecesScrollPane.setDisable(false);
-            }
+        if (menuEditorMode.isSelected()) {
+            enterEditorModeFlow();
+        } else if (game.isPuzzleReadyToPlay()) {
+            switchToGameMode();
+            guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
         } else {
-            if (game.isPuzzleReadyToPlay()) {
-                game.switchToGameMode();
-                hintButton.setDisable(false);
-                availablePiecesScrollPane.setDisable(false);
-                guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
-            } else {
-                menuEditorMode.setSelected(true); // Revert the toggle
-                guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
-            }
+            menuEditorMode.setSelected(true);
+            guiConnector.showStatusMessage("Not yet ready to switch to Game Mode.");
         }
     }
+
+    private void enterEditorModeFlow() {
+        Alert alert = createEditorModeAlert();
+        Optional<ButtonType> result = alert.showAndWait();
+
+        if (result.isPresent()) {
+            setGameModeUI(false);
+            guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
+
+            if (result.get() == ButtonType.CANCEL) {
+                exitEditorMode();
+            } else if (result.get().equals(editCurrentPuzzleBtn)) {
+                game.editCurrentPuzzle();
+                isPuzzleConfigured = true;
+            } else if (result.get().equals(createNewPuzzleBtn)) {
+                handleCreateNewPuzzleFlow();
+            }
+        }
+
+        if (!isPuzzleConfigured || result.isEmpty()) {
+            exitEditorMode();
+        }
+    }
+
+    private void handleCreateNewPuzzleFlow() {
+        if (game.isDirty()) {
+            ConfirmationResult saveResult = showUnsavedChangesDialog(
+                    "Create New Puzzle",
+                    "Do you want to save your changes before creating a new puzzle?"
+            );
+            if (saveResult == ConfirmationResult.CANCEL) {
+                menuEditorMode.setSelected(false);
+                return;
+            }
+            if (saveResult == ConfirmationResult.SAVE) {
+                handleSaveGame(null);
+            }
+        }
+        showBoardConfigurationDialog();
+        setGameModeUI(false);
+    }
+
+    private void switchToGameMode() {
+        game.switchToGameMode();
+        setGameModeUI(true);
+        guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
+    }
+
+    private Alert createEditorModeAlert() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "What would you like to edit?");
+        alert.setTitle("Enter Editor Mode");
+        editCurrentPuzzleBtn = new ButtonType("Edit Current Puzzle");
+        createNewPuzzleBtn = new ButtonType("Create New Puzzle");
+        alert.getButtonTypes().setAll(
+                editCurrentPuzzleBtn,
+                createNewPuzzleBtn,
+                ButtonType.CANCEL
+        );
+        return alert;
+    }
+
+    /**
+     * Helper method to enable or disable game-related UI controls.
+     * @param isGameMode True to enable controls, false to disable.
+     */
+    private void setGameModeUI(boolean isGameMode) {
+        if (hintButton != null) {
+            hintButton.setDisable(!isGameMode);
+        }
+        if (availablePiecesScrollPane != null) {
+            availablePiecesScrollPane.setDisable(!isGameMode);
+        }
+    }
+
+    private void exitEditorMode() {
+        menuEditorMode.setSelected(false);
+        hintButton.setDisable(false);
+        availablePiecesScrollPane.setDisable(false);
+        guiConnector.showStatusMessage("Editor mode cancelled.");
+    }
+
     @FXML void handleCheckSolvability(ActionEvent event) {
         if (game != null) {
             if (guiConnector != null) guiConnector.showStatusMessage("Check Solvability...");

@@ -16,7 +16,7 @@
                 <MenuItem fx:id="menuExit" onAction="#handleExitGame" text="Exit" />
             </Menu>
             <Menu text="Editor">
-                <CheckMenuItem fx:id="menuEditorMode" onAction="#handleToggleEditorMode" text="Editor Mode" />
+                <CheckMenuItem fx:id="menuEditorMode" onAction="#handleEditorMode" text="Editor Mode" />
             </Menu>
             <Menu text="Actions">
                 <MenuItem fx:id="menuCheckSolvability" onAction="#handleCheckSolvability" text="Check Solvability" />
