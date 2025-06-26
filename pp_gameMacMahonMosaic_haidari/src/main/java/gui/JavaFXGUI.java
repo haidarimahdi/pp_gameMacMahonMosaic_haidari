@@ -541,7 +541,14 @@ public class JavaFXGUI implements GUIConnector {
 
             Node existingNode = getNodeByRowColumnIndex(gridRow, gridCol, boardGridPane);
             if (existingNode != null) {
-                existingNode.setStyle("-fx-background-color: " + newColor + ";");
+
+                String color = switch (newColor.toUpperCase()) {
+                    case "RED" -> "#B60000";
+                    case "GREEN" -> "#007F0E";
+                    case "YELLOW" -> "#FFD800";
+                    default -> "#D3D3D3"; // Default to light gray for unexpected colors
+                };
+                existingNode.setStyle("-fx-background-color: " + color + ";");
             } else {
                 System.err.println("JavaFXGUI Error: No node found at (" + gridRow + ", " + gridCol + ")");
             }
