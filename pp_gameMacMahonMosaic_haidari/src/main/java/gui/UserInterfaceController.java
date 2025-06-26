@@ -8,17 +8,27 @@ import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.util.Pair;
 import logic.*;
 
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.*;
+import java.util.List;
 
 /**
  * Main class for the user interface.
@@ -226,6 +236,7 @@ public class UserInterfaceController implements Initializable {
         dialog.setHeaderText("Select a color for the border cell:");
         dialog.setContentText("Color:");
         Optional<String> result = dialog.showAndWait();
+
         return result.orElse(null); // Return the selected color or null if cancelled
     }
 
@@ -528,7 +539,7 @@ public class UserInterfaceController implements Initializable {
 
     @FXML void handleRestartPuzzle(ActionEvent event) {
         if (game != null) {
-            if (game.isDirty()) {
+            if (game.isDirty() && !game.isEditorMode()) {
                 ConfirmationResult result = showUnsavedChangesDialog(
                         "Restart Puzzle",
                         "Do you want to save your changes before restarting?");
@@ -611,7 +622,7 @@ public class UserInterfaceController implements Initializable {
             try {
                 game.loadGameFromFile(file);
                 menuEditorMode.setSelected(game.isEditorMode());
-                availablePiecesScrollPane.setDisable(false);
+                availablePiecesScrollPane.setDisable(game.isEditorMode());
                 hintButton.setDisable(game.isEditorMode());
 
                 Platform.runLater(() -> {

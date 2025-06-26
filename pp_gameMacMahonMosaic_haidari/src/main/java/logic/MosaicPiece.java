@@ -56,4 +56,11 @@ public char getEdgeColor(Direction direction) {
     public int getPlacementCol() {
         return col;
     }
+
+    public void setOrientation(int rotation) {
+        if (rotation % 90 != 0) {
+            throw new IllegalArgumentException("Orientation must be a multiple of 90 degrees.");
+        }
+        this.orientation = (rotation % 360 + 360) % 360; // Normalize to [0, 360)
+    }
 }

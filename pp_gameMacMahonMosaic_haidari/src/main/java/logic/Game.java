@@ -7,8 +7,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 
 import java.io.*;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.util.*;
 
 public class Game {
@@ -16,6 +14,7 @@ public class Game {
     private Field gameField;
     private List<MosaicPiece> availablePieces;
     private final List<MosaicPiece> allPuzzlePieces; // Master list from TileLoader
+    private static final int MAX_PIECES = 24; // Maximum number of pieces on the board
     private boolean isEditorMode = false; // Flag to track if the game is in editor mode
     private boolean isDirty = false; // Flag to track if the game state has been modified
     private Map<String, String> currentBoardBorderColors;
@@ -70,7 +69,7 @@ public class Game {
         Map<String, String> newBorderColors = new HashMap<>();
         Set<Position> newHoles = new HashSet<>();
         List<MosaicPiece> piecesOnBoard = new ArrayList<>();
-        Field newField = new Field(gameRows, gameCols, new HashMap<>(), new HashSet<>());
+        Field newField = new Field(gameRows, gameCols, newBorderColors, newHoles);
 
         for (int r = 0; r < totalRows; r++) {
             for (int c = 0; c < totalCols; c++) {
@@ -124,7 +123,7 @@ public class Game {
         } else if (isGameWon()) {
             this.isEditorMode = false;
             gui.showGameEndMessage("Puzzle Solved!", "This puzzle was already solved upon loading.");
-        } else if (!isPuzzleSolvable()) {
+        } else if (!isPuzzleReadyToPlay()) {
             this.isEditorMode = true;
             gui.showStatusMessage("Warning: Loaded puzzle is valid, but may not be solvable.");
         } else {
@@ -202,13 +201,13 @@ public class Game {
         String[] parts = borderKey.split("_");
         String side = parts[0];
         int index = Integer.parseInt(parts[1]);
-        Position position = switch (side) {
-            case "TOP" -> new Position(0, index);
-            case "BOTTOM" -> new Position(gameField.getRows() - 1, index);
-            case "LEFT" -> new Position(index, 0);
-            case "RIGHT" -> new Position(index, gameField.getColumns() - 1);
-            default -> throw new IllegalArgumentException("Invalid border key: " + borderKey);
-        };
+//        Position position = switch (side) {
+//            case "TOP" -> new Position(0, index);
+//            case "BOTTOM" -> new Position(gameField.getRows() - 1, index);
+//            case "LEFT" -> new Position(index, 0);
+//            case "RIGHT" -> new Position(index, gameField.getColumns() - 1);
+//            default -> throw new IllegalArgumentException("Invalid border key: " + borderKey);
+//        };
         currentBoardBorderColors.put(borderKey, newColor);
         gui.updateBorderColor(borderKey, newColor);
         isDirty = true; // Mark the game state as modified
@@ -229,12 +228,12 @@ public class Game {
         }
 
         int totalCells = gameField.getRows() * gameField.getColumns();
-        if (totalCells <= 24) {
-            gui.showStatusMessage("Holes are only allowed on boards larger than 24 cells.");
+        if (totalCells <= MAX_PIECES) {
+            gui.showStatusMessage("Holes are only allowed on boards larger than " + MAX_PIECES + " cells.");
             return;
         }
 
-        int requiredHoles = totalCells - 24;
+        int requiredHoles = totalCells - MAX_PIECES;
         int currentHoles = gameField.getNumberOfHoles();
 
         if (currentHoles >= requiredHoles) {
@@ -691,20 +690,12 @@ public class Game {
             gui.showStatusMessage("Error: Game field is not initialized.");
             return false;
         }
-        System.out.println("Checking if puzzle is ready to play...");
-        System.out.println("Number of culumns and rows: " + gameField.getColumns() + "x" + gameField.getRows());
 
         for (int c = 0; c < gameField.getColumns(); c++) {
             // Check TOP border
-            if (isBorderSegmentValid("TOP_" + c)) {
-                System.out.println("TOP border segment " + c + " is valid.");
-                return false;
-            }
+            if (isBorderSegmentValid("TOP_" + c)) return false;
             // Check BOTTOM border
-            if (isBorderSegmentValid("BOTTOM_" + c)) {
-                System.out.println("BOTTOM border segment " + c + " is valid.");
-                return false;
-            }
+            if (isBorderSegmentValid("BOTTOM_" + c)) return false;
         }
 
         for (int r = 0; r < gameField.getRows(); r++) {
@@ -715,15 +706,15 @@ public class Game {
         }
 
         int totalCells = gameField.getRows() * gameField.getColumns();
-        if (totalCells > 24) {
-            int requiredHoles = totalCells - 24;
+        if (totalCells > MAX_PIECES) {
+            int requiredHoles = totalCells - MAX_PIECES;
             if (gameField.getNumberOfHoles() < requiredHoles) {
                 gui.showStatusMessage("Error: For a " + gameField.getRows() + "x" + gameField.getColumns() +
                         " board, you need at least " + requiredHoles + " holes.");
                 return false;
             }
         }
-        System.out.println("Game is almost ready to play, checking placements...");
+
     if (!isPuzzleSolvable()) {
             gui.showStatusMessage("Error: The current puzzle configuration is not solvable.");
             return false;
@@ -785,19 +776,28 @@ public class Game {
 //    }
 
     public void restartGame() {
-        try {
-            URL puzzleResource = Game.class.getResource("/logic/defaultPuzzleField.json");
-            if (puzzleResource == null) {
-                throw new IOException("Cannot find default puzzle file.");
-            }
-            File defaultPuzzleFile = new File(puzzleResource.toURI());
-            loadGameFromFile(defaultPuzzleFile);
-
-        } catch (IOException | URISyntaxException | JsonSyntaxException e) {
-            e.printStackTrace();
-            gui.showStatusMessage("CRITICAL ERROR: Could not reload default puzzle. " + e.getMessage());
+        if (gameField == null) {
+            gui.showStatusMessage("Error: No puzzle loaded to restart.");
+            return;
         }
-        isDirty = false; // Reset dirty flag after restart
+
+        if (!isEditorMode) {
+            // Create a new empty field with the same size, borders, and holes
+            this.gameField = new Field(
+                    gameField.getRows(),
+                    gameField.getColumns(),
+                    new HashMap<>(currentBoardBorderColors),
+                    new HashSet<>(gameField.getHoles())
+            );
+
+            this.availablePieces = new ArrayList<>(this.allPuzzlePieces);
+            redrawFullBoardState();
+            updateAvailablePiecesInGUI();
+            gui.showStatusMessage("Puzzle restarted. All pieces and holes have been cleared.");
+            isDirty = false; // Reset dirty flag after restart
+        } else {
+            gui.showStatusMessage("Cannot restart game in Editor Mode. Please switch to Game Mode first.");
+        }
     }
 
     public boolean saveGame(String filePath) {
@@ -828,25 +828,31 @@ public class Game {
         return null;
     }
 
+    /**
+     * Checks if the game is won by verifying that all non-hole cells are filled
+     * and all placed pieces are valid according to the MacMahon Mosaic rules.
+     *
+     * @return {@code true} if the game is won, {@code false} otherwise.
+     */
     public boolean isGameWon() {
-        // Placeholder: A game is won if all non-hole cells are filled
-        // AND all placed pieces are valid (no red borders).
-        // This requires iterating through the gameField.
-        for (int r = 0; r < gameField.getRows(); r++) {
-            for (int c = 0; c < gameField.getColumns(); c++) {
+        int rows = gameField.getRows();
+        int cols = gameField.getColumns();
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
                 if (!gameField.isCellHole(r, c) && gameField.isCellEmpty(r, c)) {
                     return false; // Found an empty, non-hole cell
                 }
-                // Also need to check if the piece at (r,c) is validly placed
-                // This means checkPlacementValidity should be true for all placed pieces
+
                 MosaicPiece p = gameField.getPieceAt(r,c);
                 if (p != null && !checkPlacementValidity(p,r,c)){
                     return false; // Found an invalidly placed piece
                 }
             }
         }
-        // A simple check if correct number of pieces are used
-        return availablePieces.size() == (24 - (gameField.getRows() * gameField.getColumns() - gameField.getNumberOfHoles())); // All cells filled and valid
+
+        return availablePieces.size() == (MAX_PIECES
+                - (gameField.getRows() * gameField.getColumns())
+                - gameField.getNumberOfHoles()); // All cells filled and valid
     }
 
     /**
@@ -1005,23 +1011,22 @@ public class Game {
      */
     private Field solvePuzzle(Field field, List<MosaicPiece> availablePieces) {
         Position nextEmpty = field.findNextEmptyCell();
-        if (nextEmpty == null) {
-            return field;
-        }
+        if (nextEmpty == null) return field;
 
-        for (int i = 0; i < availablePieces.size(); i++) {
-            MosaicPiece currentPiece = availablePieces.get(i);
+        int availablePiecesCount = availablePieces.size();
+        MosaicPiece currentPiece;
+        List<MosaicPiece> remainingPieces;
+        for (int i = 0; i < availablePiecesCount; i++) {
+            currentPiece = availablePieces.get(i);
 
-            List<MosaicPiece> remainingPieces = new ArrayList<>(availablePieces);
-            if (i >= 0 && i < remainingPieces.size()) {
-                remainingPieces.remove(i); // Remove the piece that was just placed
-            }
+            remainingPieces = new ArrayList<>(availablePieces);
+            remainingPieces.remove(currentPiece);
 
-            for (int j = 0; j < 4; j++) {
-                MosaicPiece orientedPiece = new MosaicPiece(currentPiece.getColorPattern(), j * 90);
+            for (int rotation = 0; rotation < 360; rotation += 90) {
+                currentPiece.setOrientation(rotation);
 
-                if (checkPlacementValidity(orientedPiece, nextEmpty.row(), nextEmpty.column(), field)) {
-                    field.setPieceAt(nextEmpty.row(), nextEmpty.column(), orientedPiece);
+                if (checkPlacementValidity(currentPiece, nextEmpty.row(), nextEmpty.column(), field)) {
+                    field.setPieceAt(nextEmpty.row(), nextEmpty.column(), currentPiece);
 
                     Field solution = solvePuzzle(field, remainingPieces);
                     if (solution != null) {

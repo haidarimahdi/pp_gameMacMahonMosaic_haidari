@@ -448,7 +448,7 @@ public class JavaFXGUI implements GUIConnector {
         }
 
         Node nodeToRotate = currentlySelectedNodeVisual;
-        ImageView imageView = null;
+        ImageView imageView;
 
         if (currentlySelectedNodeVisual instanceof ImageView) {
             imageView = (ImageView) currentlySelectedNodeVisual;
