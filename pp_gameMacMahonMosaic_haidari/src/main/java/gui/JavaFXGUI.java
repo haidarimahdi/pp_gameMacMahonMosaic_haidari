@@ -1,7 +1,6 @@
 package gui;
 
 import javafx.application.Platform;
-import javafx.fxml.FXML;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -17,7 +16,6 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
 import logic.GUIConnector;
-import logic.Position;
 import logic.SelectedPieceDataFromPanel;
 
 import java.util.*;
@@ -53,7 +51,6 @@ public class JavaFXGUI implements GUIConnector {
 
     private int currentGuiGameRows;
     private int currentGuiGameCols;
-    private final Random random = new Random(); // For placeholder border colors
     private SelectedPieceDataFromPanel currentSelectedPieceInfo = null;
     private Node currentlySelectedNodeVisual = null; // To keep track of the styled node
     private double currentCellSize = 60;
@@ -450,9 +447,10 @@ public class JavaFXGUI implements GUIConnector {
         Node nodeToRotate = currentlySelectedNodeVisual;
         ImageView imageView;
 
-        if (currentlySelectedNodeVisual instanceof ImageView) {
-            imageView = (ImageView) currentlySelectedNodeVisual;
-        } else if (currentlySelectedNodeVisual instanceof StackPane) {
+//        if (currentlySelectedNodeVisual instanceof ImageView) {
+//            imageView = (ImageView) currentlySelectedNodeVisual;
+//        } else
+            if (currentlySelectedNodeVisual instanceof StackPane) {
             // Attempt to find an ImageView within the StackPane to rotate
             // This logic should match how rotation is determined in handleAvailablePieceClick
             imageView = (ImageView) ((StackPane)currentlySelectedNodeVisual).getChildren().stream()
