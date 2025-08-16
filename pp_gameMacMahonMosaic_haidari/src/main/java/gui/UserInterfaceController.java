@@ -2,6 +2,7 @@ package gui;
 
 import com.google.gson.JsonSyntaxException;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -17,10 +18,10 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.util.Pair;
 import logic.*;
+import logic.Color;
 
 import java.awt.*;
 import java.io.File;
@@ -114,17 +115,11 @@ public class UserInterfaceController implements Initializable {
         );
 
         this.game = new Game(this.guiConnector);
-        // Initialize the game via Game class
-        // This will trigger calls to guiConnector.initializeBoardView(), etc.
-        try {
-            URL puzzleResource = Game.class.getResource("/logic/defaultPuzzleField.json");
-            if (puzzleResource == null) {
-                throw new IOException("Cannot find default puzzle file.");
-            }
 
-            File puzzleFile = new File(puzzleResource.toURI());
+        try {
+            File puzzleFile = new File("src/main/java/logic/json/defaultPuzzleField.json");
             game.loadGameFromFile(puzzleFile);
-        } catch (IOException | URISyntaxException | JsonSyntaxException e) {
+        } catch (IOException | JsonSyntaxException e) {
             e.printStackTrace();
             guiConnector.showStatusMessage("CRITICAL ERROR: Could not load default puzzle." + e.getMessage());
         }
@@ -155,7 +150,7 @@ public class UserInterfaceController implements Initializable {
                             String borderKey = determineBorderKeyFromGuiCoords(guiRow, guiCol);
                             if (borderKey != null) {
                                 // Right-clicked a border cell -> toggle border color
-                                String newColor = showColorChoiceDialog();
+                                Color newColor = showColorChoiceDialog();
                                 if (newColor != null) {
                                     game.setEditorBorderColor(borderKey, newColor);
                                 }
@@ -229,13 +224,13 @@ public class UserInterfaceController implements Initializable {
         return null; // Not a border cell
     }
 
-    private String showColorChoiceDialog() {
-        List<String> colorOptions = Arrays.asList("RED", "GREEN", "YELLOW");
-        ChoiceDialog<String> dialog = new ChoiceDialog<>(colorOptions.get(0), colorOptions);
+    private Color showColorChoiceDialog() {
+        List<Color> colorOptions = Arrays.asList(Color.RED, Color.GREEN, Color.YELLOW);
+        ChoiceDialog<Color> dialog = new ChoiceDialog<>(colorOptions.get(0), colorOptions);
         dialog.setTitle("Choose Border Color");
         dialog.setHeaderText("Select a color for the border cell:");
         dialog.setContentText("Color:");
-        Optional<String> result = dialog.showAndWait();
+        Optional<Color> result = dialog.showAndWait();
 
         return result.orElse(null); // Return the selected color or null if cancelled
     }
@@ -737,21 +732,56 @@ public class UserInterfaceController implements Initializable {
     }
 
     @FXML void handleCheckSolvability(ActionEvent event) {
-        if (game != null) {
-            if (guiConnector != null) guiConnector.showStatusMessage("Check Solvability...");
+        if (game == null) {
+            guiConnector.showStatusMessage("Game not initialized. Cannot check solvability.");
+            return;
+        }
 
-            boolean isSolvable = game.isPuzzleSolvable();
+        menuCheckSolvability.setDisable(true);
+        guiConnector.showStatusMessage("Checking Solvability, please wait...");
+
+        Task<Boolean> checkSolvabilityTask = new Task<>() {
+            @Override
+            protected Boolean call() throws Exception {
+                return game.isPuzzleSolvable();
+            }
+        };
+
+        checkSolvabilityTask.setOnSucceeded(e -> {
+            boolean isSolvable = checkSolvabilityTask.getValue();
             String message = isSolvable ? "This puzzle is solvable from the current state!"
                     : "This puzzle is not solvable from the current state. You may need to remove some pieces.";
-
             Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
             alert.setTitle("Puzzle Solvability Check");
             alert.setHeaderText(null); // No header text
             alert.showAndWait();
+            guiConnector.showStatusMessage("Solvability check completed.");
+            menuCheckSolvability.setDisable(false);
+        });
 
-        } else {
-            guiConnector.showStatusMessage("Game not initialized. Cannot check solvability.");
-        }
+        checkSolvabilityTask.setOnFailed(e -> {
+            checkSolvabilityTask.getException().printStackTrace();
+            guiConnector.showStatusMessage("An error occurred while checking solvability!");
+            menuCheckSolvability.setDisable(false);
+        });
+
+        new Thread(checkSolvabilityTask).start();
+
+//        if (game != null) {
+//            if (guiConnector != null) guiConnector.showStatusMessage("Check Solvability...");
+//
+//            boolean isSolvable = game.isPuzzleSolvable();
+//            String message = isSolvable ? "This puzzle is solvable from the current state!"
+//                    : "This puzzle is not solvable from the current state. You may need to remove some pieces.";
+//
+//            Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
+//            alert.setTitle("Puzzle Solvability Check");
+//            alert.setHeaderText(null); // No header text
+//            alert.showAndWait();
+//
+//        } else {
+//            guiConnector.showStatusMessage("Game not initialized. Cannot check solvability.");
+//        }
     }
 
 

@@ -71,7 +71,7 @@ public class JavaFXGUI implements GUIConnector {
 
 
     @Override
-    public void initializeBoardView(int gameRows, int gameCols, Map<String, String> borderColors) {
+    public void initializeBoardView(int gameRows, int gameCols, Map<String, logic.Color> borderColors) {
         this.currentGuiGameRows = gameRows;
         this.currentGuiGameCols = gameCols;
 
@@ -130,7 +130,7 @@ public class JavaFXGUI implements GUIConnector {
             boardGridPane.getRowConstraints().add(rcBottomBorder);
 
             // --- Populate Grid Cells ---
-            Map<String, String> currentBorderColors = (borderColors != null) ? borderColors : Collections.emptyMap();
+            Map<String, logic.Color> currentBorderColors = (borderColors != null) ? borderColors : Collections.emptyMap();
 
             for (int r_gui = 0; r_gui < totalGridRows; r_gui++) {
                 for (int c_gui = 0; c_gui < totalGridCols; c_gui++) {
@@ -138,7 +138,7 @@ public class JavaFXGUI implements GUIConnector {
                     boolean isGameCell = (r_gui > 0 && r_gui <= gameRows && c_gui > 0 && c_gui <= gameCols);
 
                     if (isGameCell) {
-                        cellNode = createGameCellVisual(null, null, 0, false, false);
+                        cellNode = createGameCellVisual(null, 0, false, false);
                     } else {
                         String key = "";
                         if (r_gui == 0 && c_gui > 0 && c_gui <= gameCols) { // Top Border
@@ -150,7 +150,7 @@ public class JavaFXGUI implements GUIConnector {
                         } else if (c_gui == totalGridCols - 1 && r_gui > 0 && r_gui <= gameRows) { // Right Border
                             key = "RIGHT_" + (r_gui - 1);
                         }
-                        Color color = colorFromString(currentBorderColors.getOrDefault(key, "NONE"));
+                        Color color = colorFromString(currentBorderColors.getOrDefault(key, logic.Color.NONE));
                         cellNode = createCornerOrBorderCellVisual(color);
                     }
                     boardGridPane.add(cellNode, c_gui, r_gui);
@@ -171,18 +171,18 @@ public class JavaFXGUI implements GUIConnector {
         return pane;
     }
 
-    private Color colorFromString(String colorName) {
+    private Color colorFromString(logic.Color colorName) {
         if (colorName == null) return Color.GRAY;
-        return switch (colorName.toUpperCase()) {
-            case "RED" -> Color.web("#B60000");
-            case "GREEN" -> Color.web("#007F0E");
-            case "YELLOW" -> Color.web("#FFD800");
-            case "NONE" -> Color.TRANSPARENT; // So "NONE" border segments are not explicitly colored
+        return switch (colorName) {
+            case RED -> Color.web("#B60000");
+            case GREEN -> Color.web("#007F0E");
+            case YELLOW -> Color.web("#FFD800");
+            case NONE -> Color.TRANSPARENT; // So "NONE" border segments are not explicitly colored
             default -> Color.LIGHTGRAY; // Fallback for unexpected color strings
         };
     }
 
-    private Node createGameCellVisual(String pieceId, String pieceImagePath, int rotationDegrees,
+    private Node createGameCellVisual(String pieceId, int rotationDegrees,
                                       boolean isError, boolean isHole) {
         StackPane cellPane = new StackPane();
         cellPane.setAlignment(Pos.CENTER);
@@ -221,7 +221,7 @@ public class JavaFXGUI implements GUIConnector {
             );
             cellPane.getChildren().add(holeMarker);
         } else if (pieceId != null) {
-            ImageView pieceImageView = getImageViewForPiece(pieceId, pieceImagePath);
+            ImageView pieceImageView = getImageViewForPiece(pieceId);
             pieceImageView.setRotate(rotationDegrees);
             pieceImageView.setMouseTransparent(true);
             pieceImageView.setPreserveRatio(true);
@@ -239,7 +239,7 @@ public class JavaFXGUI implements GUIConnector {
         return cellPane;
     }
 
-    private ImageView getImageViewForPiece(String pieceId, String pieceImagePath) {
+    private ImageView getImageViewForPiece(String pieceId) {
         ImageView imageView = new ImageView();
         try {
             // Assuming pieceImagePath is just the pattern like "RGYB"
@@ -252,7 +252,7 @@ public class JavaFXGUI implements GUIConnector {
             // This needs careful handling to match cell size from adjustBoardGridPaneSize
             // For now, let it be managed by StackPane, might need fitWidth/Height
         } catch (Exception e) {
-            System.err.println("JavaFXGUI: Failed to load image for piece: " + pieceImagePath + " - " + e.getMessage());
+            System.err.println("JavaFXGUI: Failed to load image for piece: " + e.getMessage());
             // Fallback visual: show the piece ID as text
             Text textFallback = new Text(pieceId != null ? pieceId.substring(0, Math.min(pieceId.length(), 4)) : "?");
             textFallback.setStyle("-fx-font-size: 10px;"); // Adjust font size as needed
@@ -269,7 +269,7 @@ public class JavaFXGUI implements GUIConnector {
 
 
     @Override
-    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegree,
+    public void updateGameCell(int gameRow, int gameCol, String pieceId, int rotationDegree,
                                boolean isError, boolean isHole) {
         Platform.runLater(() -> {
             if (boardGridPane == null) {
@@ -282,7 +282,7 @@ public class JavaFXGUI implements GUIConnector {
 
             Node existingNode = getNodeByRowColumnIndex(gridR, gridC, boardGridPane);
             // Pass currentGuiGameRows/Cols to createGameCellVisual if needed for bindings
-            Node newVisual = createGameCellVisual(pieceId, pieceImagePath, rotationDegree, isError, isHole);
+            Node newVisual = createGameCellVisual(pieceId, rotationDegree, isError, isHole);
             GridPane.setHalignment(newVisual, HPos.CENTER);
             GridPane.setValignment(newVisual, VPos.CENTER);
 
@@ -498,7 +498,7 @@ public class JavaFXGUI implements GUIConnector {
     }
 
     @Override
-    public void updateBorderColor(String borderKey, String newColor) {
+    public void updateBorderColor(String borderKey, logic.Color newColor) {
         Platform.runLater(() -> {
             if (boardGridPane == null) {
                 System.err.println("JavaFXGUI Error: boardGridPane is null in updateBorderColor!");
@@ -540,12 +540,39 @@ public class JavaFXGUI implements GUIConnector {
             Node existingNode = getNodeByRowColumnIndex(gridRow, gridCol, boardGridPane);
             if (existingNode != null) {
 
-                Color richColor = colorFromString(newColor);
-                existingNode.setStyle("-fx-background-color: " + toHex(richColor) + ";");
+                javafx.scene.paint.Color fxColor = getFxColor(newColor);
+                existingNode.setStyle("-fx-background-color: " + toHex(fxColor) + ";");
             } else {
                 System.err.println("JavaFXGUI Error: No node found at (" + gridRow + ", " + gridCol + ")");
             }
         });
+    }
+
+    @Override
+    public void showAlert(String titleAlert, String bodyAlert) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Warning");
+            alert.setHeaderText(titleAlert);
+            alert.setContentText(bodyAlert);
+            alert.showAndWait();
+        });
+    }
+
+    /**
+     * Converts a logic.Color to a JavaFX Color.
+     * @param color The logic.Color to convert.
+     * @return A JavaFX Color corresponding to the logic.Color.
+     */
+    private javafx.scene.paint.Color getFxColor(logic.Color color) {
+        if (color == null) return javafx.scene.paint.Color.TRANSPARENT;
+        return switch (color) {
+            case RED -> javafx.scene.paint.Color.web("#B60000");
+            case GREEN -> javafx.scene.paint.Color.web("#007F0E");
+            case YELLOW -> javafx.scene.paint.Color.web("#FFD800");
+            case NONE -> javafx.scene.paint.Color.TRANSPARENT;
+            default -> javafx.scene.paint.Color.LIGHTGRAY; // Fallback for unexpected color strings
+        };
     }
 
     /**

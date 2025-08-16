@@ -10,12 +10,12 @@ import java.util.Map;
  */
 public class FakeGUI implements GUIConnector{
     @Override
-    public void initializeBoardView(int gameRows, int gameCols, Map<String, String> borderColors) {
+    public void initializeBoardView(int gameRows, int gameCols, Map<String, Color> borderColors) {
         System.out.println("FakeGUI: initializeBoardView called with " + gameRows + "x" + gameCols);
     }
 
     @Override
-    public void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees,
+    public void updateGameCell(int gameRow, int gameCol, String pieceId, int rotationDegrees,
                                boolean isError, boolean isHole) {
         System.out.println("FakeGUI: updateGameCell called for (" + gameRow + "," + gameCol + ") with piece: "
                 + pieceId + ", error: " + isError + ", isHole: " + isHole);
@@ -79,7 +79,12 @@ public class FakeGUI implements GUIConnector{
     }
 
     @Override
-    public void updateBorderColor(String borderKey, String newColor) {
+    public void updateBorderColor(String borderKey, Color newColor) {
         System.out.println("FakeGUI: updateBorderColor called for borderKey: " + borderKey + " with new color: " + newColor);
+    }
+
+    @Override
+    public void showAlert(String solvabilityCheckSkipped, String s) {
+        System.out.println("FakeGUI: showAlert called with message: " + solvabilityCheckSkipped + ", details: " + s);
     }
 }

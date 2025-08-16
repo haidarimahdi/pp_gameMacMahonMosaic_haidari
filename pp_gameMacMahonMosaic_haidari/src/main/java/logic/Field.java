@@ -8,10 +8,10 @@ public class Field {
     private final int rows;
     private final int columns;
     private final MosaicPiece[][] pieces;
-    private final Map<String, String> borderColors;
+    private final Map<String, Color> borderColors;
     private final Set<Position> holes;
 
-    public Field(int rows, int columns, Map<String, String> borderColors, Set<Position> holes) {
+    public Field(int rows, int columns, Map<String, Color> borderColors, Set<Position> holes) {
         this.rows = rows;
         this.columns = columns;
         this.pieces = new MosaicPiece[rows][columns];
@@ -89,5 +89,50 @@ public class Field {
             }
         }
         return copy;
+    }
+
+    /**
+     * Finds the most constrained empty cell (the one with the most non-empty neighbors or borders).
+     * This heuristic helps the solver fail faster by tackling the most difficult cells first.
+     *
+     * @return Position of the most constrained empty cell, or null if no empty cells are found.
+     */
+    public Position findMostConstrainedEmptyCell() {
+        Position bestPosition = null;
+        int maxConstraints = -1;
+
+        for (int r = 0; r < this.rows; r++) {
+            for (int c = 0; c < this.columns; c++) {
+                if (isCellEmpty(r, c) && !isCellHole(r, c)) {
+                    int currentConstraints = 0;
+                    for (Direction dir : Direction.values()) {
+                        int neighborRow = r;
+                        int neighborCol = c;
+                        switch (dir) {
+                            case NORTH: neighborRow--; break;
+                            case EAST:  neighborCol++; break;
+                            case SOUTH: neighborRow++; break;
+                            case WEST:  neighborCol--; break;
+                        }
+
+                        // A border counts as a constraint
+                        if (neighborRow < 0 || neighborRow >= rows || neighborCol < 0 || neighborCol >= columns) {
+                            currentConstraints++;
+                        } else {
+                            // A non-empty neighbor cell counts as a constraint
+                            if (!isCellEmpty(neighborRow, neighborCol)) {
+                                currentConstraints++;
+                            }
+                        }
+                    }
+
+                    if (currentConstraints > maxConstraints) {
+                        maxConstraints = currentConstraints;
+                        bestPosition = new Position(r, c);
+                    }
+                }
+            }
+        }
+        return bestPosition;
     }
 }

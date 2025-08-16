@@ -14,7 +14,7 @@ public interface GUIConnector {
      * e.g., key "TOP_0" value "RED", "LEFT_1" value "GREEN".
      * (Key format needs to be defined by logic and understood by GUI).
      */
-    void initializeBoardView(int gameRows, int gameCols, Map<String, String> borderColors);
+    void initializeBoardView(int gameRows, int gameCols, Map<String, Color> borderColors);
 
     /**
      * Updates a specific game cell on the board.
@@ -26,7 +26,7 @@ public interface GUIConnector {
      * @param rotationDegrees The rotation (0, 90, 180, 270) to apply to the piece's visual.
      * @param isError         True if this piece is currently in an error state.
      */
-    void updateGameCell(int gameRow, int gameCol, String pieceId, String pieceImagePath, int rotationDegrees,
+    void updateGameCell(int gameRow, int gameCol, String pieceId, int rotationDegrees,
                         boolean isError, boolean isHole);
 
     /**
@@ -98,5 +98,7 @@ public interface GUIConnector {
      */
     void highlightCell(int row, int column, String colorPattern);
 
-    void updateBorderColor(String borderKey, String newColor);
+    void updateBorderColor(String borderKey, Color newColor);
+
+    void showAlert(String solvabilityCheckSkipped, String s);
 }

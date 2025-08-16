@@ -14,15 +14,11 @@ import java.util.List;
  * It uses the Gson library to parse the JSON data into a list of tile patterns.
  */
 public class TileLoader {
-    private static final String TILES_RESOURCE_PATH = "tiles.json";
+    private static final String TILES_RESOURCE_PATH = "src/main/java/logic/json/tiles.json";
 
     public static List<String> loadTilePatterns() {
         Gson gson = new Gson();
-        try (InputStream inputStream = TileLoader.class.getResourceAsStream(TILES_RESOURCE_PATH)) {
-            if (inputStream == null) {
-                System.err.println("TileLoader Error: Cannot find resource file at " + TILES_RESOURCE_PATH);
-                return Collections.emptyList();
-            }
+        try (InputStream inputStream = new java.io.FileInputStream(TILES_RESOURCE_PATH)) {
             try (InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
                 TilesDefinition definition = gson.fromJson(reader, TilesDefinition.class);
                 if (definition != null && definition.getTiles() != null) {
