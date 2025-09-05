@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class FakeGUI implements GUIConnector{
     @Override
-    public void initializeBoardView(int gameRows, int gameCols, Map<String, Color> borderColors) {
+    public void initializeBoardView(int gameRows, int gameCols, Map<BorderPosition, Color> borderColors) {
         System.out.println("FakeGUI: initializeBoardView called with " + gameRows + "x" + gameCols);
     }
 
@@ -24,16 +24,6 @@ public class FakeGUI implements GUIConnector{
     @Override
     public void displayAvailablePieces(List<String> pieceRepresentationForGUI) {
         System.out.println("FakeGUI: displayAvailablePieces called with " + pieceRepresentationForGUI.size() + " pieces.");
-    }
-
-    @Override
-    public void showStatusMessage(String message) {
-         System.out.println("FakeGUI: showStatusMessage: " + message);
-    }
-
-    @Override
-    public void showGameEndMessage(String title, String message) {
-         System.out.println("FakeGUI: showGameEndMessage: Title='" + title + "', Message='" + message + "'");
     }
 
 //    @Override
@@ -79,12 +69,27 @@ public class FakeGUI implements GUIConnector{
     }
 
     @Override
-    public void updateBorderColor(String borderKey, Color newColor) {
-        System.out.println("FakeGUI: updateBorderColor called for borderKey: " + borderKey + " with new color: " + newColor);
+    public void updateBorderColor(BorderPosition borderPosition, Color newColor) {
+        System.out.println("FakeGUI: updateBorderColor called for borderKey: " + borderPosition + " with new color: " + newColor);
     }
 
     @Override
-    public void showAlert(String solvabilityCheckSkipped, String s) {
-        System.out.println("FakeGUI: showAlert called with message: " + solvabilityCheckSkipped + ", details: " + s);
+    public void showStatusMessage(String key, Object... args) {
+        System.out.println("FakeGUI: showStatusMessage called with key: " + key + " args: " + List.of(args));
+
+    }
+
+    @Override
+    public void showGameEndMessage(String titleKey, String messageKey, Object... args) {
+        System.out.println("FakeGUI: showGameEndMessage called with titleKey: " + titleKey +
+                ", messageKey: " + messageKey + ", args: " + List.of(args));
+
+    }
+
+    @Override
+    public void showAlert(String titleKey, String bodyKey, Object... args) {
+        System.out.println("FakeGUI: showAlert called with titleKey: " + titleKey +
+                ", bodyKey: " + bodyKey + ", args: " + List.of(args));
+
     }
 }

@@ -8,10 +8,10 @@ public class Field {
     private final int rows;
     private final int columns;
     private final MosaicPiece[][] pieces;
-    private final Map<String, Color> borderColors;
+    private final Map<BorderPosition, Color> borderColors;
     private final Set<Position> holes;
 
-    public Field(int rows, int columns, Map<String, Color> borderColors, Set<Position> holes) {
+    public Field(int rows, int columns, Map<BorderPosition, Color> borderColors, Set<Position> holes) {
         this.rows = rows;
         this.columns = columns;
         this.pieces = new MosaicPiece[rows][columns];
@@ -29,6 +29,9 @@ public class Field {
     public MosaicPiece getPieceAt(int row, int column) {
         return pieces[row][column];
     }
+    public Map<BorderPosition, Color> getBorderColors() {
+        return borderColors;
+    }
     public Set<Position> getHoles() {
         return holes;
     }
@@ -43,9 +46,6 @@ public class Field {
     }
     public void setPieceAt(int row, int column, MosaicPiece piece) {
         if (row >= 0 && row < this.rows && column >=0 && column < this.columns) {
-            if (piece != null) {
-                piece.setPlacement(row, column); // Update the piece's placement position
-            }
             pieces[row][column] = piece; // Allows setting to null or a new piece
         }
     }
@@ -109,10 +109,10 @@ public class Field {
                         int neighborRow = r;
                         int neighborCol = c;
                         switch (dir) {
-                            case NORTH: neighborRow--; break;
-                            case EAST:  neighborCol++; break;
-                            case SOUTH: neighborRow++; break;
-                            case WEST:  neighborCol--; break;
+                            case TOP: neighborRow--; break;
+                            case RIGHT:  neighborCol++; break;
+                            case BOTTOM: neighborRow++; break;
+                            case LEFT:  neighborCol--; break;
                         }
 
                         // A border counts as a constraint
@@ -135,4 +135,6 @@ public class Field {
         }
         return bestPosition;
     }
+
+
 }

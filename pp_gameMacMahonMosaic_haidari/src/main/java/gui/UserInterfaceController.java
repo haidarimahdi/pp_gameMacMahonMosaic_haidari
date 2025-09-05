@@ -2,7 +2,6 @@ package gui;
 
 import com.google.gson.JsonSyntaxException;
 import javafx.application.Platform;
-import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -17,16 +16,18 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.util.Pair;
-import logic.*;
-import logic.Color;
 
-import java.awt.*;
+import logic.BorderPosition;
+import logic.Color;
+import logic.Game;
+import logic.SelectedPieceDataFromPanel;
+
 import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.*;
 import java.util.List;
@@ -34,36 +35,33 @@ import java.util.List;
 /**
  * Main class for the user interface.
  *
- * @author mjo, cei
+ * @author mjo, cei, mahdi
  */
 public class UserInterfaceController implements Initializable {
 
 
-    // --- FXML Injected Fields ---
+
+    // ================== FXML Injected Fields ==================
     @FXML
     private Button hintButton;
-
-    // Right panel for available pieces
     @FXML
     private TilePane availablePiecesPane;
     @FXML
     private ScrollPane availablePiecesScrollPane;
     @FXML
     private Button rotateSelectedPieceButton;
-
-    // Center GridPane for the board
-    @FXML private StackPane boardWrapperPane;
-
+    @FXML
+    private StackPane boardWrapperPane;
     @FXML
     private GridPane boardGridPane;
-
-    // MenuBar and MenuItems
     @FXML
     private MenuBar menuBar;
     @FXML
     private MenuItem menuCheckSolvability;
     @FXML
     private CheckMenuItem menuEditorMode;
+    @FXML
+    private MenuItem menuClearBoard;
     @FXML
     private MenuItem menuExit;
     @FXML
@@ -74,26 +72,17 @@ public class UserInterfaceController implements Initializable {
     private MenuItem menuSave;
     @FXML
     private MenuItem menuSolutionHint;
-
-    // Bottom status label
     @FXML
     private Label statusLabel;
 
     private ButtonType editCurrentPuzzleBtn, createNewPuzzleBtn;
-    // Default dimensions for the game board
-//    private int currentNumCols = 3;
-//    private int currentNumRows = 4;
 
-    // Constants for initial setup
-    private static final int INITIAL_GAME_ROWS = 4;
-    private static final int INITIAL_GAME_COLUMNS = 3;
     private static final double BORDER_PROPORTION_IN_CONTROLLER = 0.25; // For adjustGridPaneSize
     private boolean isResizing = false;
     boolean isPuzzleConfigured;
 
-
     private Game game;
-    private GUIConnector guiConnector;
+    private JavaFXGUI gui;
 
 
     /**
@@ -107,121 +96,237 @@ public class UserInterfaceController implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
 
-        this.guiConnector = new JavaFXGUI(
+        this.gui = new JavaFXGUI(
                 this.boardGridPane,
                 this.availablePiecesPane,
                 this.rotateSelectedPieceButton,
                 this.statusLabel
         );
 
-        this.game = new Game(this.guiConnector);
+        this.game = new Game(this.gui);
 
         try {
-            File puzzleFile = new File("src/main/java/logic/json/defaultPuzzleField.json");
+            File puzzleFile = new File("src/main/resources/logic/json/defaultPuzzleField.json");
             game.loadGameFromFile(puzzleFile);
         } catch (IOException | JsonSyntaxException e) {
             e.printStackTrace();
-            guiConnector.showStatusMessage("CRITICAL ERROR: Could not load default puzzle." + e.getMessage());
+            gui.showStatusMessage("CRITICAL ERROR: Could not load default puzzle." + e.getMessage());
         }
 
+        updateUIForGameMode(!game.isEditorMode());
         menuEditorMode.setSelected(game.isEditorMode());
         hintButton.setDisable(game.isEditorMode());
-
         addResizingListeners();
 
-        if (boardGridPane != null) {
-            boardGridPane.setOnMouseClicked(event -> {
-                if (game.isEditorMode()) {
-                    Node clickedNode = getClickedCellNode((Node) event.getTarget(), boardGridPane);
-                    if (clickedNode == null) return;
-
-                    Integer guiRow = GridPane.getRowIndex(clickedNode);
-                    Integer guiCol = GridPane.getColumnIndex(clickedNode);
-                    if (guiRow == null || guiCol == null) return;
-                    if (event.getButton() == MouseButton.SECONDARY) {
-                        boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
-                                guiCol > 0 && guiCol <= game.getGameField().getColumns();
-                        if (isGameCell) {
-                            // Right-clicked a game cell -> toggle hole state
-                            int gameLogicRow = guiRow - 1;
-                            int gameLogicCol = guiCol - 1;
-                            game.toggleHoleState(gameLogicRow, gameLogicCol);
-                        } else {
-                            String borderKey = determineBorderKeyFromGuiCoords(guiRow, guiCol);
-                            if (borderKey != null) {
-                                // Right-clicked a border cell -> toggle border color
-                                Color newColor = showColorChoiceDialog();
-                                if (newColor != null) {
-                                    game.setEditorBorderColor(borderKey, newColor);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Node clickedTarget = (Node) event.getTarget(); // Get the deepest node clicked
-                    Node cellNode = getClickedCellNode(clickedTarget, boardGridPane); // Use helper method
-
-                    if (cellNode == null) {
-                        return; // Exit if no valid cell node was found
-                    }
-
-                    Integer guiRow = GridPane.getRowIndex(cellNode);
-                    Integer guiCol = GridPane.getColumnIndex(cellNode);
-
-                    if (guiRow == null || guiCol == null) {
-                        return; // Exit if row/col cannot be determined
-                    }
-
-                    // Ensure game and gameField are ready for dimension checks
-                    if (game == null || game.getGameField() == null) {
-                        System.err.println("UserInterfaceController: Game or GameField not initialized. Cannot process click further.");
-                        return;
-                    }
-
-                    // Check if the click was on an actual game cell (not border/corner)
-                    boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
-                            guiCol > 0 && guiCol <= game.getGameField().getColumns();
-
-                    if (isGameCell) {
-                        handleBoardCellClickedLogic(guiRow, guiCol); // Call your existing detailed logic handler
-                    }
-
-                }
-            });
-        } else {
-            System.err.println("UserInterfaceController: boardGridPane is null, cannot attach event delegator.");
-        }
+        boardGridPane.setOnMouseClicked(this::handleBoardClick);
 
 
-        addResizingListeners();
+//        if (boardGridPane != null) {
+//            boardGridPane.setOnMouseClicked(event -> {
+//                if (game.isEditorMode()) {
+//                    Node clickedNode = getClickedCellNode((Node) event.getTarget(), boardGridPane);
+//                    if (clickedNode == null) return;
+//
+//                    Integer guiRow = GridPane.getRowIndex(clickedNode);
+//                    Integer guiCol = GridPane.getColumnIndex(clickedNode);
+//                    if (guiRow == null || guiCol == null) return;
+//                    if (event.getButton() == MouseButton.SECONDARY) {
+//                        boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
+//                                guiCol > 0 && guiCol <= game.getGameField().getColumns();
+//                        if (isGameCell) {
+//                            // Right-clicked a game cell -> toggle hole state
+//                            int gameLogicRow = guiRow - 1;
+//                            int gameLogicCol = guiCol - 1;
+//                            game.toggleHoleState(gameLogicRow, gameLogicCol);
+//                        } else {
+//                            BorderPosition borderPosition = determineBorderKeyFromGuiCoords(guiRow, guiCol);
+//                            if (borderPosition != null) {
+//                                // Right-clicked a border cell -> toggle border color
+//                                Color newColor = showColorChoiceDialog();
+//                                if (newColor != null) {
+//                                    game.setEditorBorderColor(borderPosition, newColor);
+//                                }
+//                            }
+//                        }
+//                    }
+//                } else {
+//                    Node clickedTarget = (Node) event.getTarget(); // Get the deepest node clicked
+//                    Node cellNode = getClickedCellNode(clickedTarget, boardGridPane); // Use helper method
+//
+//                    if (cellNode == null) {
+//                        return; // Exit if no valid cell node was found
+//                    }
+//
+//                    Integer guiRow = GridPane.getRowIndex(cellNode);
+//                    Integer guiCol = GridPane.getColumnIndex(cellNode);
+//
+//                    if (guiRow == null || guiCol == null) {
+//                        return; // Exit if row/col cannot be determined
+//                    }
+//
+//                    // Ensure game and gameField are ready for dimension checks
+//                    if (game == null || game.getGameField() == null) {
+//                        System.err.println("UserInterfaceController: Game or GameField not initialized. Cannot process click further.");
+//                        return;
+//                    }
+//
+//                    // Check if the click was on an actual game cell (not border/corner)
+//                    boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
+//                            guiCol > 0 && guiCol <= game.getGameField().getColumns();
+//
+//                    if (isGameCell) {
+//                        handleBoardCellClickedLogic(guiRow, guiCol); // Call your existing detailed logic handler
+//                    }
+//
+//                }
+//            });
+//        } else {
+//            System.err.println("UserInterfaceController: boardGridPane is null, cannot attach event delegator.");
+//        }
+
         rotateSelectedPieceButton.setDisable(true);
     }
 
-    private String determineBorderKeyFromGuiCoords(int guiRow, int guiCol) {
-        int gameRows = game.getGameField().getRows();
-        int gameCols = game.getGameField().getColumns();
-        // Check if the click is on a border cell and not a corner
-        boolean onTopBorder = guiRow == 0 && guiCol > 0 && guiCol <= gameCols;
-        boolean onBottomBorder = guiRow == gameRows + 1 && guiCol > 0 && guiCol <= gameCols;
-        boolean onLeftBorder = guiCol == 0 && guiRow > 0 && guiRow <= gameRows;
-        boolean onRightBorder = guiCol == gameCols + 1 && guiRow > 0 && guiRow <= gameRows;
-        // Top border
-        if (onTopBorder) {
-            return "TOP_" + (guiCol - 1); // Subtract 1 for 0-based index
+    /**
+     * Centralized method to update UI controls based on the game mode.
+     *
+     * @param isGameMode true if the game is in play mode, false for editor mode.
+     */
+    private void updateUIForGameMode(boolean isGameMode) {
+        menuEditorMode.setSelected(!isGameMode);
+        hintButton.setDisable(!isGameMode);
+        availablePiecesScrollPane.setDisable(!isGameMode);
+        menuCheckSolvability.setDisable(!isGameMode);
+        menuSolutionHint.setDisable(!isGameMode);
+    }
+
+    private void addResizingListeners() {
+        if (boardWrapperPane == null) {
+            System.err.println("CRITICAL: boardWrapperPane is null. Resizing will fail.");
+            return;
         }
-        // Bottom border
-        if (onBottomBorder) {
-            return "BOTTOM_" + (guiCol - 1); // Subtract 1 for 0-based index
+        // Listeners on the wrapper pane (analogous to example's fieldPane)
+        boardWrapperPane.widthProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.doubleValue() > 0 && boardWrapperPane.getHeight() > 0) {
+                adjustBoardGridPaneSize(newVal.doubleValue(), boardWrapperPane.getHeight());
+            }
+        });
+        boardWrapperPane.heightProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.doubleValue() > 0 && boardWrapperPane.getWidth() > 0) {
+                adjustBoardGridPaneSize(boardWrapperPane.getWidth(), newVal.doubleValue());
+            }
+        });
+    }
+
+    /**
+     * Main handler for all clicks on the board. Delegates to mode-specific handlers.
+     */
+    private void handleBoardClick(MouseEvent event) {
+        if (game == null || game.getGameField() == null) {
+            System.err.println("UserInterfaceController: Game not initialized. Cannot process click.");
+            return;
         }
-        // Left border
-        if (onLeftBorder) {
-            return "LEFT_" + (guiRow - 1); // Subtract 1 for 0-based index
+
+        Node clickedNode = getClickedCellNode((Node) event.getTarget(), boardGridPane);
+        if (clickedNode == null) return;
+
+        Integer guiRow = GridPane.getRowIndex(clickedNode);
+        Integer guiCol = GridPane.getColumnIndex(clickedNode);
+        if (guiRow == null || guiCol == null) return;
+
+        if (game.isEditorMode()) {
+            if (event.getButton() == MouseButton.SECONDARY) {
+                handleEditorRightClick(guiRow, guiCol);
+            }
+        } else {
+            handleGameModeClick(clickedNode);
         }
-        // Right border
-        if (onRightBorder) {
-            return "RIGHT_" + (guiRow - 1); // Subtract 1 for 0-based index
+    }
+
+    /**
+     * Handles clicks on the board when in Game Mode.
+     */
+    private void handleGameModeClick(Node clickedNode) {
+        Integer guiRow = GridPane.getRowIndex(clickedNode);
+        Integer guiCol = GridPane.getColumnIndex(clickedNode);
+
+        if (guiRow == null || guiCol == null) return;
+
+        boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
+                guiCol > 0 && guiCol <= game.getGameField().getColumns();
+
+        if (isGameCell) {
+            handleBoardCellClickedLogic(guiRow, guiCol);
         }
-        return null; // Not a border cell
+    }
+
+    /**
+     * Core logic for handling clicks on game cells in Game Mode.
+     * This method assumes the clicked cell is a valid game cell within bounds.
+     *
+     * @param guiClickedRow The 1-based row index from the GUI.
+     * @param guiClickedCol The 1-based column index from the GUI.
+     */
+    private void handleBoardCellClickedLogic(int guiClickedRow, int guiClickedCol) {
+
+        if (gui == null || game == null || game.getGameField() == null) {
+            System.err.println("UserInterfaceController: Essential components (guiConnector, game, or gameField) are null. Cannot handle board click.");
+            return;
+        }
+
+        // Convert GUI 1-based index to game logic 0-based index
+        int gameLogicRow = guiClickedRow - 1;
+        int gameLogicCol = guiClickedCol - 1;
+
+        // Basic bounds check for the logical coordinates
+        if (gameLogicRow < 0 || gameLogicRow >= game.getGameField().getRows() ||
+                gameLogicCol < 0 || gameLogicCol >= game.getGameField().getColumns()) {
+            System.err.println("UserInterfaceController: Clicked cell GUI(" + guiClickedRow + "," + guiClickedCol +
+                    ") is outside valid game board bounds.");
+
+            return;
+        }
+
+        SelectedPieceDataFromPanel selectedDataFromPanel = gui.getSelectedPieceDataFromPanel();
+
+
+        if (selectedDataFromPanel != null) {
+            game.attemptPlacePieceFromPanel(
+                    selectedDataFromPanel.pattern(),
+                    selectedDataFromPanel.rotationDegrees(),
+                    gameLogicRow,
+                    gameLogicCol
+            );
+        } else if (!game.getGameField().isCellEmpty(gameLogicRow, gameLogicCol) &&
+                !game.getGameField().isCellHole(gameLogicRow, gameLogicCol)) {
+            game.removePieceFromField(gameLogicRow, gameLogicCol);
+        } else {
+            String message = game.getGameField().isCellHole(gameLogicRow, gameLogicCol)
+                    ? "This is a hole. Pieces cannot be placed or removed here."
+                    : "Cell is empty. Select a piece to place.";
+            gui.showStatusMessage(message);
+        }
+    }
+
+    /**
+     * Handles clicks on the board when in Editor Mode (right-clicks).
+     */
+    private void handleEditorRightClick(int guiRow, int guiCol) {
+        boolean isGameCell = guiRow > 0 && guiRow <= game.getGameField().getRows() &&
+                guiCol > 0 && guiCol <= game.getGameField().getColumns();
+
+        if (isGameCell) {
+            game.toggleHoleState(guiRow - 1, guiCol - 1);
+        } else {
+            BorderPosition borderPosition = Game.getBorderPositionForCoords(guiRow, guiCol,
+                    game.getGameField().getRows(), game.getGameField().getColumns());
+            if (borderPosition != null) {
+                Color newColor = showColorChoiceDialog();
+                if (newColor != null) {
+                    game.setEditorBorderColor(borderPosition, newColor);
+                }
+            }
+        }
     }
 
     private Color showColorChoiceDialog() {
@@ -245,85 +350,18 @@ public class UserInterfaceController implements Initializable {
      */
     private Node getClickedCellNode(Node eventTarget, GridPane gridPane) {
         while (eventTarget != null) {
-            // If the parent of the current node is the gridPane, we've found the cell node
+            // If the parent of the current node is the gridPane, the cell node is found
             if (eventTarget.getParent() == gridPane) return eventTarget;
-            // If we've reached the gridPane itself, the click was not on a cell
+            // If the gridPane itself is reached, the click was not on a cell
             if (eventTarget == gridPane) return null;
             // Move up to the parent node
             eventTarget = eventTarget.getParent();
         }
 
-        return null; // If we exit the loop, no cell node was found
+        return null; // When the loop is exited => no cell node was found
     }
 
-    private void handleBoardCellClickedLogic(int guiClickedRow, int guiClickedCol) {
 
-        if (guiConnector == null || game == null || game.getGameField() == null) {
-            System.err.println("UserInterfaceController: Essential components (guiConnector, game, or gameField) are null. Cannot handle board click.");
-            return;
-        }
-
-        // Convert GUI 1-based index to game logic 0-based index
-        int gameLogicRow = guiClickedRow - 1;
-        int gameLogicCol = guiClickedCol - 1;
-
-        // Basic bounds check for the logical coordinates
-        if (gameLogicRow < 0 || gameLogicRow >= game.getGameField().getRows() ||
-                gameLogicCol < 0 || gameLogicCol >= game.getGameField().getColumns()) {
-            System.err.println("UserInterfaceController: Clicked cell GUI(" + guiClickedRow + "," + guiClickedCol +
-                    ") is outside valid game board bounds.");
-
-            return;
-        }
-
-        SelectedPieceDataFromPanel selectedDataFromPanel = guiConnector.getSelectedPieceDataFromPanel();
-
-
-        if (selectedDataFromPanel != null) {
-            game.attemptPlacePieceFromPanel(
-                    selectedDataFromPanel.pattern(),
-                    selectedDataFromPanel.rotationDegrees(),
-                    gameLogicRow,
-                    gameLogicCol
-            );
-        } else {
-            // --- NO piece selected from the panel: Check if we should attempt to REMOVE a piece ---
-            // Only attempt to remove if the clicked cell is actually occupied (and not a hole)
-            if (!game.getGameField().isCellEmpty(gameLogicRow, gameLogicCol) &&
-                    !game.getGameField().isCellHole(gameLogicRow, gameLogicCol)) {
-
-                game.removePieceFromField(gameLogicRow, gameLogicCol);
-
-            } else {
-                // No piece selected from panel, and the clicked cell is empty or a hole.
-                // The user's intention is that clicking an empty cell here does nothing specific related to removal.
-                if (game.getGameField().isCellHole(gameLogicRow, gameLogicCol)){
-                    guiConnector.showStatusMessage("This is a hole. Pieces cannot be placed or removed here.");
-                } else {
-                     guiConnector.showStatusMessage("Cell is empty. Select a piece to place.");
-                }
-            }
-        }
-    }
-
-    private void addResizingListeners() {
-        if (boardWrapperPane == null) {
-            System.err.println("CRITICAL: boardWrapperPane is null. Resizing will fail.");
-            return;
-        }
-        // Listeners on the wrapper pane (analogous to example's fieldPane)
-        boardWrapperPane.widthProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal.doubleValue() > 0 && boardWrapperPane.getHeight() > 0) {
-                adjustBoardGridPaneSize(newVal.doubleValue(), boardWrapperPane.getHeight());
-            }
-        });
-        boardWrapperPane.heightProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal.doubleValue() > 0 && boardWrapperPane.getWidth() > 0) {
-                adjustBoardGridPaneSize(boardWrapperPane.getWidth(), newVal.doubleValue());
-            }
-        });
-    }
-    private static final double ACTUAL_BORDER_THICKNESS_PIXELS = 25.0;
     /**
      * Adapts the example's adjustGridPaneSize method.
      * Sets boardGridPane's pref and max size so its "effective" game cells can be square.
@@ -382,8 +420,7 @@ public class UserInterfaceController implements Initializable {
             double targetBoardHeight = (effectiveUnitSize * effectiveRowsForSizing) + vGapsGrid + vPaddingGrid;
 
             // --- Critical for Shrinking ---
-            boardGridPane.setMinSize(0, 0); // Force allow shrinking
-
+            boardGridPane.setMinSize(200, 300);
             boardGridPane.setPrefSize(targetBoardWidth, targetBoardHeight);
             boardGridPane.setMaxSize(targetBoardWidth, targetBoardHeight); // Cap growth
 
@@ -391,13 +428,12 @@ public class UserInterfaceController implements Initializable {
             // The size of a visual game cell will be 1 * effectiveUnitSize
             double actualGameCellVisualSize = effectiveUnitSize;
 
-            if (guiConnector instanceof JavaFXGUI) {
-                ((JavaFXGUI) guiConnector).setCurrentCellSize(actualGameCellVisualSize);
+            if (gui != null) {
+                gui.setCurrentCellSize(actualGameCellVisualSize);
             }
 
             for (Node node : boardGridPane.getChildren()) {
-                if (node instanceof Region) {
-                    Region region = (Region) node;
+                if (node instanceof Region region) {
                     Integer rowIndex = GridPane.getRowIndex(node);
                     Integer colIndex = GridPane.getColumnIndex(node);
 
@@ -523,16 +559,16 @@ public class UserInterfaceController implements Initializable {
 
     @FXML
     void handleRotateSelectedPiece(ActionEvent event) {
-        if (guiConnector != null) {
-            double newRotation = guiConnector.rotateSelectedPieceInPanel();
+        if (gui != null) {
+            double newRotation = gui.rotateSelectedPieceInPanel();
             // Status message is handled by JavaFXGUI's implementation of rotateSelectedPieceInPanel
             if (newRotation == -1) {
-                 guiConnector.showStatusMessage("No piece selected to rotate."); // Already handled
+                 gui.showStatusMessage("No piece selected to rotate."); // Already handled
             }
         }
     }
 
-    @FXML void handleRestartPuzzle(ActionEvent event) {
+    @FXML void handleRestartPuzzle() {
         if (game != null) {
             if (game.isDirty() && !game.isEditorMode()) {
                 ConfirmationResult result = showUnsavedChangesDialog(
@@ -540,7 +576,7 @@ public class UserInterfaceController implements Initializable {
                         "Do you want to save your changes before restarting?");
                 switch (result) {
                     case SAVE:
-                        handleSaveGame(null); // Save the game
+                        handleSaveGame(); // Save the game
                         game.restartGame(); // Restart after saving
                         break;
                     case DONT_SAVE:
@@ -564,14 +600,14 @@ public class UserInterfaceController implements Initializable {
         }
     }
 
-    @FXML void handleExitGame(ActionEvent event) {
+    @FXML void handleExitGame() {
         if (game.isDirty()) {
             ConfirmationResult result = showUnsavedChangesDialog(
                     "Exit Game",
                     "Do you want to save your changes before exiting?");
             switch (result) {
                 case SAVE:
-                    handleSaveGame(null); // Save the game
+                    handleSaveGame(); // Save the game
                     Platform.exit(); // Exit after saving
                     break;
                 case DONT_SAVE:
@@ -586,8 +622,8 @@ public class UserInterfaceController implements Initializable {
         }
     }
 
-    @FXML void handleSaveGame(ActionEvent event) {
-        if (guiConnector != null) guiConnector.showStatusMessage("Save action...");
+    @FXML void handleSaveGame() {
+        if (gui != null) gui.showStatusMessage("Save action...");
 
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Puzzle");
@@ -598,16 +634,16 @@ public class UserInterfaceController implements Initializable {
             try {
                 // Delegate all file writing and data formatting to the Game class.
                 game.saveGameToFile(file);
-                guiConnector.showStatusMessage("Puzzle saved successfully to " + file.getName());
+                gui.showStatusMessage("Puzzle saved successfully to " + file.getName());
             } catch (IOException e) {
                 // Catch file writing errors and show a message.
-                guiConnector.showStatusMessage("Error: Could not save file. " + e.getMessage());
+                gui.showStatusMessage("Error: Could not save file. " + e.getMessage());
             }
         }
     }
 
-    @FXML void handleLoadGame(ActionEvent event) {
-        if (guiConnector != null) guiConnector.showStatusMessage("Load action...");
+    @FXML void handleLoadGame() {
+        if (gui != null) gui.showStatusMessage("Load action...");
 
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Load Puzzle");
@@ -626,17 +662,17 @@ public class UserInterfaceController implements Initializable {
                     }
                 });
             } catch (JsonSyntaxException e) {
-                guiConnector.showStatusMessage("Failed to load puzzle: " + e.getMessage());
+                gui.showStatusMessage("Failed to load puzzle: " + e.getMessage());
             } catch (IOException  e) {
-                guiConnector.showStatusMessage("Error loading puzzle: " + e.getMessage());
+                gui.showStatusMessage("Error loading puzzle: " + e.getMessage());
             }
         }
 
     }
 
-    @FXML void handleEditorMode(ActionEvent event) {
+    @FXML void handleEditorMode() {
         if (game == null) {
-            guiConnector.showStatusMessage("Game not initialized. Cannot toggle editor mode.");
+            gui.showStatusMessage("Game not initialized. Cannot toggle editor mode.");
             return;
         }
 
@@ -644,10 +680,10 @@ public class UserInterfaceController implements Initializable {
             enterEditorModeFlow();
         } else if (game.isPuzzleReadyToPlay()) {
             switchToGameMode();
-            guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
+            gui.showStatusMessage("Switched to game mode. You can now play the puzzle.");
         } else {
             menuEditorMode.setSelected(true);
-            guiConnector.showStatusMessage("Not yet ready to switch to Game Mode.");
+            gui.showStatusMessage("Not yet ready to switch to Game Mode.");
         }
     }
 
@@ -657,7 +693,7 @@ public class UserInterfaceController implements Initializable {
 
         if (result.isPresent()) {
             setGameModeUI(false);
-            guiConnector.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
+            gui.showStatusMessage("Editor mode activated. You can now edit the puzzle.");
 
             if (result.get() == ButtonType.CANCEL) {
                 exitEditorMode();
@@ -685,7 +721,7 @@ public class UserInterfaceController implements Initializable {
                 return;
             }
             if (saveResult == ConfirmationResult.SAVE) {
-                handleSaveGame(null);
+                handleSaveGame();
             }
         }
         showBoardConfigurationDialog();
@@ -695,7 +731,7 @@ public class UserInterfaceController implements Initializable {
     private void switchToGameMode() {
         game.switchToGameMode();
         setGameModeUI(true);
-        guiConnector.showStatusMessage("Switched to game mode. You can now play the puzzle.");
+        gui.showStatusMessage("Switched to game mode. You can now play the puzzle.");
     }
 
     private Alert createEditorModeAlert() {
@@ -728,72 +764,63 @@ public class UserInterfaceController implements Initializable {
         menuEditorMode.setSelected(false);
         hintButton.setDisable(false);
         availablePiecesScrollPane.setDisable(false);
-        guiConnector.showStatusMessage("Editor mode cancelled.");
+        gui.showStatusMessage("Editor mode cancelled.");
     }
 
-    @FXML void handleCheckSolvability(ActionEvent event) {
+    @FXML void handleCheckSolvability() {
         if (game == null) {
-            guiConnector.showStatusMessage("Game not initialized. Cannot check solvability.");
+            gui.showStatusMessage("Game not initialized. Cannot check solvability.");
             return;
         }
 
         menuCheckSolvability.setDisable(true);
-        guiConnector.showStatusMessage("Checking Solvability, please wait...");
+        gui.showStatusMessage("Checking Solvability, please wait...");
+        boolean isSolvable = game.isPuzzleSolvable();
 
-        Task<Boolean> checkSolvabilityTask = new Task<>() {
-            @Override
-            protected Boolean call() throws Exception {
-                return game.isPuzzleSolvable();
+        if (game.getNumberOfFreeCells() <= Game.MIN_ALLOWED_FREE_CELL) {
+            String message;
+            Alert alert;
+            if (isSolvable) {
+                 message = "This puzzle is solvable from the current state!";
+                 alert = new Alert(Alert.AlertType.INFORMATION, message);
+            } else {
+                    message = "This puzzle is not solvable from the current state. " +
+                            "You may need to remove some pieces.";
+                    alert = new Alert(Alert.AlertType.ERROR, message);
             }
-        };
-
-        checkSolvabilityTask.setOnSucceeded(e -> {
-            boolean isSolvable = checkSolvabilityTask.getValue();
-            String message = isSolvable ? "This puzzle is solvable from the current state!"
-                    : "This puzzle is not solvable from the current state. You may need to remove some pieces.";
-            Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
             alert.setTitle("Puzzle Solvability Check");
-            alert.setHeaderText(null); // No header text
+            alert.setHeaderText(isSolvable ? "Solvability check completed." : "Solvability check failed.");
             alert.showAndWait();
-            guiConnector.showStatusMessage("Solvability check completed.");
-            menuCheckSolvability.setDisable(false);
-        });
+        }
 
-        checkSolvabilityTask.setOnFailed(e -> {
-            checkSolvabilityTask.getException().printStackTrace();
-            guiConnector.showStatusMessage("An error occurred while checking solvability!");
-            menuCheckSolvability.setDisable(false);
-        });
-
-        new Thread(checkSolvabilityTask).start();
-
-//        if (game != null) {
-//            if (guiConnector != null) guiConnector.showStatusMessage("Check Solvability...");
-//
-//            boolean isSolvable = game.isPuzzleSolvable();
-//            String message = isSolvable ? "This puzzle is solvable from the current state!"
-//                    : "This puzzle is not solvable from the current state. You may need to remove some pieces.";
-//
-//            Alert alert = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
-//            alert.setTitle("Puzzle Solvability Check");
-//            alert.setHeaderText(null); // No header text
-//            alert.showAndWait();
-//
-//        } else {
-//            guiConnector.showStatusMessage("Game not initialized. Cannot check solvability.");
-//        }
+        gui.showStatusMessage("Solvability check finished.");
+        menuCheckSolvability.setDisable(false);
     }
 
 
-    @FXML void handleGetSolutionHint(ActionEvent event) { if (guiConnector != null) guiConnector.showStatusMessage("Get Hint...");}
+    @FXML void handleGetSolutionHint() { if (gui != null) gui.showStatusMessage("Get Hint...");}
 
-    @FXML void handleHintButtonAction(ActionEvent actionEvent) {
+    @FXML void handleHintButtonAction() {
         if (game != null) {
-            if (guiConnector != null) guiConnector.showStatusMessage("Hint button clicked. Processing hint...");
+            if (gui != null) gui.showStatusMessage("Hint button clicked. Processing hint...");
             game.provideHint();
 
         } else {
-            guiConnector.showStatusMessage("Game not initialized. Cannot provide a hint.");
+            gui.showStatusMessage("Game not initialized. Cannot provide a hint.");
+        }
+    }
+
+    @FXML void handleClearBoard() {
+        if (game != null) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Clear Board");
+            alert.setHeaderText("Are you sure you want to remove all pieces from the board?");
+            alert.setContentText("This action cannot be undone.");
+
+            Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                game.clearBoard();
+            }
         }
     }
 }

@@ -15,7 +15,7 @@ public class Solver {
      * @return A Field object representing the solution, or null if unsolvable.
      */
     public Field findSolution(Field fieldToSolve, List<MosaicPiece> availablePieces,
-                              Map<String, Color> borderColors) {
+                              Map<BorderPosition, Color> borderColors) {
         return solvePuzzle(fieldToSolve, availablePieces, borderColors);
     }
 
@@ -28,7 +28,7 @@ public class Solver {
      * @param borderColors    The map of required border colors for the puzzle.
      * @return A solved Field object if a solution is found, otherwise null.
      */
-    private Field solvePuzzle(Field field, List<MosaicPiece> availablePieces, Map<String, Color> borderColors) {
+    private Field solvePuzzle(Field field, List<MosaicPiece> availablePieces, Map<BorderPosition, Color> borderColors) {
         Position nextEmpty = field.findMostConstrainedEmptyCell();
         if (nextEmpty == null) {
             return field;
@@ -72,7 +72,7 @@ public class Solver {
      * @param field The current state of the board.
      * @return A Map where the key is the direction and the value is the required Color enum.
      */
-    private Map<Direction, Color> getConstraintsForCell(int row, int col, Field field, Map<String, Color> borderColors) {
+    private Map<Direction, Color> getConstraintsForCell(int row, int col, Field field, Map<BorderPosition, Color> borderColors) {
         Map<Direction, Color> constraints = new EnumMap<>(Direction.class);
 
         // Check all four directions for a constraint.
@@ -122,7 +122,7 @@ public class Solver {
      * @return {@code true} if the placement is valid, {@code false} otherwise.
      */
     public static boolean checkPlacementValidity(MosaicPiece piece, int row, int col, Field field,
-                                                Map<String, Color> borderColors) {
+                                                Map<BorderPosition, Color> borderColors) {
         for (Direction dir : Direction.values()) {
             Color pieceEdgeColor = piece.getEdgeColor(dir);
 
@@ -132,7 +132,7 @@ public class Solver {
 
             // Check against borders
             if (neighborRow < 0 || neighborRow >= field.getRows() || neighborCol < 0 || neighborCol >= field.getColumns()) {
-                String borderKey = getBorderSide(row, col, field.getRows(), field.getColumns(), dir);
+                BorderPosition borderKey = getBorderSide(row, col, field.getRows(), field.getColumns(), dir);
                 Color requiredBorderColor = borderColors.getOrDefault(borderKey, Color.NONE);
                 if (requiredBorderColor != Color.NONE && pieceEdgeColor != requiredBorderColor) {
                     return false; // Mismatch with a defined border
@@ -154,10 +154,10 @@ public class Solver {
         int neighborRow = row;
         int neighborCol = col;
         switch (dir) {
-            case NORTH -> neighborRow--;
-            case EAST -> neighborCol++;
-            case SOUTH -> neighborRow++;
-            case WEST -> neighborCol--;
+            case TOP -> neighborRow--;
+            case RIGHT -> neighborCol++;
+            case BOTTOM -> neighborRow++;
+            case LEFT -> neighborCol--;
         }
         return new int[]{neighborRow, neighborCol};
     }
@@ -171,7 +171,8 @@ public class Solver {
      * @param direction The direction of the edge (NORTH, EAST, SOUTH, WEST) to check.
      * @return The required Color enum (RED, GREEN, YELLOW), or Color.NONE if there is no constraint.
      */
-    public static Color getRequiredEdgeColorFor(int row, int col, Direction direction, Field field, Map<String, Color> borderColors) {
+    public static Color getRequiredEdgeColorFor(int row, int col, Direction direction, Field field,
+                                                Map<BorderPosition, Color> borderColors) {
 
         int[] neighbor = getNeighborCoordinates(row, col, direction);
         int neighborRow = neighbor[0];
@@ -181,7 +182,7 @@ public class Solver {
         if (neighborRow < 0 || neighborRow >= field.getRows() ||
                 neighborCol < 0 || neighborCol >= field.getColumns()) {
 
-            String borderKey = getBorderSide(row, col, field.getRows(), field.getColumns(), direction);
+            BorderPosition borderKey = getBorderSide(row, col, field.getRows(), field.getColumns(), direction);
             return borderColors.getOrDefault(borderKey, Color.NONE);
         }
 
@@ -207,12 +208,12 @@ public class Solver {
      * @param edgeDirectionOfPiece The direction of the edge being checked (NORTH, EAST, SOUTH, WEST).
      * @return A string representing the border side key, or null if not applicable.
      */
-    private static String getBorderSide(int row, int col, int gameRows, int gameCols, Direction edgeDirectionOfPiece) {
+    private static BorderPosition getBorderSide(int row, int col, int gameRows, int gameCols, Direction edgeDirectionOfPiece) {
         return switch (edgeDirectionOfPiece) {
-            case NORTH -> row == 0 ? "TOP_" + col : null;
-            case EAST -> col == gameCols - 1 ? "RIGHT_" + row : null;
-            case SOUTH -> row == gameRows - 1 ? "BOTTOM_" + col : null;
-            case WEST -> col == 0 ? "LEFT_" + row : null;
+            case TOP -> row == 0 ? new BorderPosition(Direction.TOP, col) : null;
+            case RIGHT -> col == gameCols - 1 ? new BorderPosition(Direction.RIGHT, row) : null;
+            case BOTTOM -> row == gameRows - 1 ? new BorderPosition(Direction.BOTTOM, col): null;
+            case LEFT -> col == 0 ? new BorderPosition(Direction.LEFT, row) : null;
         };
     }
 

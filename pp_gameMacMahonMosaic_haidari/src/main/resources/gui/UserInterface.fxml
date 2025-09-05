@@ -21,6 +21,7 @@
             <Menu text="Actions">
                 <MenuItem fx:id="menuCheckSolvability" onAction="#handleCheckSolvability" text="Check Solvability" />
                 <MenuItem fx:id="menuSolutionHint" onAction="#handleGetSolutionHint" text="Get Solution Hint" />
+                <MenuItem fx:id="menuClearBoard" onAction="#handleClearBoard" text="Clear All Pieces" />
             </Menu>
         </MenuBar>
     </top>

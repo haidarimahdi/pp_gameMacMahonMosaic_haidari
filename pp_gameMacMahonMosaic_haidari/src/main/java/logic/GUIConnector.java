@@ -14,7 +14,7 @@ public interface GUIConnector {
      * e.g., key "TOP_0" value "RED", "LEFT_1" value "GREEN".
      * (Key format needs to be defined by logic and understood by GUI).
      */
-    void initializeBoardView(int gameRows, int gameCols, Map<String, Color> borderColors);
+    void initializeBoardView(int gameRows, int gameCols, Map<BorderPosition, Color> borderColors);
 
     /**
      * Updates a specific game cell on the board.
@@ -22,7 +22,6 @@ public interface GUIConnector {
      * @param gameRow         0-indexed row of the game cell.
      * @param gameCol         0-indexed column of the game cell.
      * @param pieceId         Identifier for the piece (e.g., "RGYB"), or null if cell is empty.
-     * @param pieceImagePath  Path or identifier for the piece's visual representation.
      * @param rotationDegrees The rotation (0, 90, 180, 270) to apply to the piece's visual.
      * @param isError         True if this piece is currently in an error state.
      */
@@ -35,21 +34,6 @@ public interface GUIConnector {
      * Each string could also be a more complex representation if needed.
      */
     void displayAvailablePieces(List<String> pieceRepresentationForGUI);
-
-//    void displayAvailablePieces(List<String> pieceRepresentationForGUI);
-
-    /**
-     * Displays a status message to the user.
-     * @param message The message to display.
-     */
-    void showStatusMessage(String message);
-
-    /**
-     * Announces a win, loss, or other significant game-ending event.
-     * @param title   The title of the announcement (e.g., "Congratulations!").
-     * @param message The detailed message (e.g., "You solved the puzzle!").
-     */
-    void showGameEndMessage(String title, String message);
 
     /**
      * Clears any currently highlighted cells.
@@ -98,7 +82,30 @@ public interface GUIConnector {
      */
     void highlightCell(int row, int column, String colorPattern);
 
-    void updateBorderColor(String borderKey, Color newColor);
+    void updateBorderColor(BorderPosition borderPosition, Color newColor);
 
-    void showAlert(String solvabilityCheckSkipped, String s);
+//    void showAlert(String solvabilityCheckSkipped, String s);
+
+    /**
+     * Displays a status message to the user.
+     * @param key The key for the message in the properties file.
+     * @param args Optional arguments to format into the message.
+     */
+    void showStatusMessage(String key, Object... args);
+
+    /**
+     * Announces a game-ending event.
+     * @param titleKey   The key for the title.
+     * @param messageKey The key for the detailed message.
+     * @param args       Optional arguments for the message.
+     */
+    void showGameEndMessage(String titleKey, String messageKey, Object... args);
+
+    /**
+     * Shows a generic alert.
+     * @param titleKey The key for the alert title/header.
+     * @param bodyKey  The key for the alert body text.
+     * @param args     Optional arguments for the body text.
+     */
+    void showAlert(String titleKey, String bodyKey, Object... args);
 }

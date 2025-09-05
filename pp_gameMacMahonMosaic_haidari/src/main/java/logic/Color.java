@@ -6,6 +6,7 @@ public enum Color {
     YELLOW('Y'),
     HOLE('H'), // Represents edge of a hole in the puzzle
     NONE('N'); // Represents an empty cell or no color, used for empty borders or cells
+
     private final char colorCode;
 
     Color(char colorCode) {

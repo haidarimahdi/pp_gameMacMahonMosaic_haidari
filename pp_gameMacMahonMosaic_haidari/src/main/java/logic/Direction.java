@@ -1,14 +1,14 @@
 package logic;
 
 public enum Direction {
-    NORTH, EAST, SOUTH, WEST;
+    TOP, RIGHT, BOTTOM, LEFT;
 
     public Direction opposite() {
         return switch (this) {
-            case NORTH -> SOUTH;
-            case EAST -> WEST;
-            case SOUTH -> NORTH;
-            case WEST -> EAST;
+            case TOP -> BOTTOM;
+            case RIGHT -> LEFT;
+            case BOTTOM -> TOP;
+            case LEFT -> RIGHT;
         };
     }
 }

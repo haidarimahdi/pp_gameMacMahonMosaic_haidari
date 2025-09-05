@@ -15,9 +15,12 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Text;
+
+import logic.BorderPosition;
 import logic.GUIConnector;
 import logic.SelectedPieceDataFromPanel;
 
+import java.text.MessageFormat;
 import java.util.*;
 
 public class JavaFXGUI implements GUIConnector {
@@ -44,6 +47,8 @@ public class JavaFXGUI implements GUIConnector {
     // Bottom status label
     private final Label statusLabel;
 
+    private final ResourceBundle messages;
+
     // Constants for visual representation
 
     private static final double BORDER_PROPORTION_FOR_CONSTRAINTS = 0.25; // Border is 1/4 of a game cell
@@ -63,6 +68,7 @@ public class JavaFXGUI implements GUIConnector {
         this.availablePiecesPane = availablePiecesPane;
         this.rotateSelectedPieceButton = rotateSelectedPieceButton;
         this.statusLabel = statusLabel;
+        this.messages = ResourceBundle.getBundle("gui.messages");
     }
 
     public void setCurrentCellSize(double size) {
@@ -71,7 +77,7 @@ public class JavaFXGUI implements GUIConnector {
 
 
     @Override
-    public void initializeBoardView(int gameRows, int gameCols, Map<String, logic.Color> borderColors) {
+    public void initializeBoardView(int gameRows, int gameCols, Map<BorderPosition, logic.Color> borderColors) {
         this.currentGuiGameRows = gameRows;
         this.currentGuiGameCols = gameCols;
 
@@ -130,7 +136,7 @@ public class JavaFXGUI implements GUIConnector {
             boardGridPane.getRowConstraints().add(rcBottomBorder);
 
             // --- Populate Grid Cells ---
-            Map<String, logic.Color> currentBorderColors = (borderColors != null) ? borderColors : Collections.emptyMap();
+            Map<BorderPosition, logic.Color> currentBorderColors = (borderColors != null) ? borderColors : Collections.emptyMap();
 
             for (int r_gui = 0; r_gui < totalGridRows; r_gui++) {
                 for (int c_gui = 0; c_gui < totalGridCols; c_gui++) {
@@ -140,15 +146,15 @@ public class JavaFXGUI implements GUIConnector {
                     if (isGameCell) {
                         cellNode = createGameCellVisual(null, 0, false, false);
                     } else {
-                        String key = "";
+                        BorderPosition key = null;
                         if (r_gui == 0 && c_gui > 0 && c_gui <= gameCols) { // Top Border
-                            key = "TOP_" + (c_gui - 1);
+                            key = new BorderPosition(logic.Direction.TOP, c_gui - 1);
                         } else if (r_gui == totalGridRows - 1 && c_gui > 0 && c_gui <= gameCols) { // Bottom Border
-                            key = "BOTTOM_" + (c_gui - 1);
+                            key = new BorderPosition(logic.Direction.BOTTOM, c_gui - 1);
                         } else if (c_gui == 0 && r_gui > 0 && r_gui <= gameRows) { // Left Border
-                            key = "LEFT_" + (r_gui - 1);
+                            key = new BorderPosition(logic.Direction.LEFT, r_gui - 1);
                         } else if (c_gui == totalGridCols - 1 && r_gui > 0 && r_gui <= gameRows) { // Right Border
-                            key = "RIGHT_" + (r_gui - 1);
+                            key = new BorderPosition(logic.Direction.RIGHT, r_gui - 1);
                         }
                         Color color = colorFromString(currentBorderColors.getOrDefault(key, logic.Color.NONE));
                         cellNode = createCornerOrBorderCellVisual(color);
@@ -267,7 +273,6 @@ public class JavaFXGUI implements GUIConnector {
         return imageView;
     }
 
-
     @Override
     public void updateGameCell(int gameRow, int gameCol, String pieceId, int rotationDegree,
                                boolean isError, boolean isHole) {
@@ -333,7 +338,6 @@ public class JavaFXGUI implements GUIConnector {
                     displayNode = sp;
                 }
 
-                // IMPORTANT: Attach the click handler here
                 final String finalPieceRep = pieceRep; // For lambda
                 final Node finalDisplayNode = displayNode;
                 finalDisplayNode.setOnMouseClicked(event -> handleAvailablePieceClick(finalDisplayNode, finalPieceRep));
@@ -379,21 +383,20 @@ public class JavaFXGUI implements GUIConnector {
         }
     }
 
-    @Override
     public void showStatusMessage(String message) {
         Platform.runLater(() -> statusLabel.setText(message));
     }
 
-    @Override
-    public void showGameEndMessage(String title, String message) {
-        Platform.runLater(() -> {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle(title);
-            alert.setHeaderText(null);
-            alert.setContentText(message);
-            alert.showAndWait();
-        });
-    }
+//    @Override
+//    public void showGameEndMessage(String title, String message) {
+//        Platform.runLater(() -> {
+//            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+//            alert.setTitle(title);
+//            alert.setHeaderText(null);
+//            alert.setContentText(message);
+//            alert.showAndWait();
+//        });
+//    }
 
     @Override
     public void clearCellHighlights() {
@@ -447,16 +450,16 @@ public class JavaFXGUI implements GUIConnector {
         Node nodeToRotate = currentlySelectedNodeVisual;
         ImageView imageView;
 
-//        if (currentlySelectedNodeVisual instanceof ImageView) {
-//            imageView = (ImageView) currentlySelectedNodeVisual;
-//        } else
-            if (currentlySelectedNodeVisual instanceof StackPane) {
+        if (currentlySelectedNodeVisual instanceof StackPane) {
             // Attempt to find an ImageView within the StackPane to rotate
             // This logic should match how rotation is determined in handleAvailablePieceClick
             imageView = (ImageView) ((StackPane)currentlySelectedNodeVisual).getChildren().stream()
                     .filter(ImageView.class::isInstance).findFirst().orElse(null);
-            if (imageView == null) nodeToRotate = currentlySelectedNodeVisual; // Rotate StackPane if no ImageView
-            else nodeToRotate = imageView;
+            if (imageView == null) {
+                nodeToRotate = currentlySelectedNodeVisual; // Rotate StackPane if no ImageView
+            } else {
+                nodeToRotate = imageView;
+            }
         }
 
         nodeToRotate.setRotate((nodeToRotate.getRotate() + 90) % 360);
@@ -466,7 +469,6 @@ public class JavaFXGUI implements GUIConnector {
         this.currentSelectedPieceInfo = new SelectedPieceDataFromPanel(currentSelectedPieceInfo.pattern(), newRotation);
 
         String msg = "Rotated " + currentSelectedPieceInfo.pattern() + " to " + newRotation + "°";
-        System.out.println("JavaFXGUI: " + msg);
         showStatusMessage(msg);
         return newRotation;
     }
@@ -482,59 +484,34 @@ public class JavaFXGUI implements GUIConnector {
 
     @Override
     public void highlightCell(int row, int column, String colorPattern) {
-//        Platform.runLater(() -> {
-//            Node cellNode = getNodeByRowColumnIndex(row + 1, column + 1, boardGridPane);
-//            if (cellNode != null) {
-//                // Apply a background color based on the colorPattern
-//                Color highlightColor = switch (colorPattern.toUpperCase()) {
-//                    case "RED" -> Color.RED;
-//                    case "GREEN" -> Color.GREEN;
-//                    case "YELLOW" -> Color.YELLOW;
-//                    default -> Color.LIGHTGRAY; // Fallback color
-//                };
-//                cellNode.setStyle("-fx-border-color: black; -fx-border-width: 2px;");
-//            }
-//        });
     }
 
     @Override
-    public void updateBorderColor(String borderKey, logic.Color newColor) {
+    public void updateBorderColor(BorderPosition borderPosition, logic.Color newColor) {
         Platform.runLater(() -> {
             if (boardGridPane == null) {
                 System.err.println("JavaFXGUI Error: boardGridPane is null in updateBorderColor!");
                 return;
             }
 
-            // Determine which border segment to update based on the key
-            String[] parts = borderKey.split("_");
-            if (parts.length != 2) {
-                System.err.println("JavaFXGUI Error: Invalid border key format: " + borderKey);
-                return;
-            }
-
-            String position = parts[0].toUpperCase(); // TOP, BOTTOM, LEFT, RIGHT
-            int index = Integer.parseInt(parts[1]);
-
             int gridRow = 0, gridCol = 0;
 
-            switch (position) {
-                case "TOP":
-                    gridCol = index + 1; // +1 for the left border
+            // Determine which border segment to update based on the key
+            switch (borderPosition.side()) {
+                case TOP:
+                    gridCol = borderPosition.index() + 1; // +1 for the left border
                     break;
-                case "BOTTOM":
+                case BOTTOM:
                     gridRow = currentGuiGameRows + 1; // +1 for the top border
-                    gridCol = index + 1; // +1 for the left border
+                    gridCol = borderPosition.index() + 1; // +1 for the left border
                     break;
-                case "LEFT":
-                    gridRow = index + 1; // +1 for the top border
+                case LEFT:
+                    gridRow = borderPosition.index() + 1; // +1 for the top border
                     break;
-                case "RIGHT":
-                    gridRow = index + 1; // +1 for the top border
+                case RIGHT:
+                    gridRow = borderPosition.index() + 1; // +1 for the top border
                     gridCol = currentGuiGameCols + 1; // +1 for the left border
                     break;
-                default:
-                    System.err.println("JavaFXGUI Error: Unknown position in border key: " + position);
-                    return;
             }
 
             Node existingNode = getNodeByRowColumnIndex(gridRow, gridCol, boardGridPane);
@@ -548,16 +525,16 @@ public class JavaFXGUI implements GUIConnector {
         });
     }
 
-    @Override
-    public void showAlert(String titleAlert, String bodyAlert) {
-        Platform.runLater(() -> {
-            Alert alert = new Alert(Alert.AlertType.WARNING);
-            alert.setTitle("Warning");
-            alert.setHeaderText(titleAlert);
-            alert.setContentText(bodyAlert);
-            alert.showAndWait();
-        });
-    }
+//    @Override
+//    public void showAlert(String titleAlert, String bodyAlert) {
+//        Platform.runLater(() -> {
+//            Alert alert = new Alert(Alert.AlertType.WARNING);
+//            alert.setTitle("Warning");
+//            alert.setHeaderText(titleAlert);
+//            alert.setContentText(bodyAlert);
+//            alert.showAndWait();
+//        });
+//    }
 
     /**
      * Converts a logic.Color to a JavaFX Color.
@@ -585,5 +562,36 @@ public class JavaFXGUI implements GUIConnector {
                 (int) (richColor.getRed() * 255),
                 (int) (richColor.getGreen() * 255),
                 (int) (richColor.getBlue() * 255));
+    }
+
+    @Override
+    public void showStatusMessage(String key, Object... args) {
+        String message = messages.getString(key);
+        String formattedMessage = MessageFormat.format(message, args);
+        Platform.runLater(() -> statusLabel.setText(formattedMessage));
+    }
+
+    @Override
+    public void showGameEndMessage(String titleKey, String messageKey, Object... args) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle(messages.getString(titleKey));
+            alert.setHeaderText(null);
+            String message = messages.getString(messageKey);
+            alert.setContentText(MessageFormat.format(message, args));
+            alert.showAndWait();
+        });
+    }
+
+    @Override
+    public void showAlert(String titleKey, String bodyKey, Object... args) {
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle(messages.getString("alert.warning.title"));
+            alert.setHeaderText(messages.getString(titleKey));
+            String body = messages.getString(bodyKey);
+            alert.setContentText(MessageFormat.format(body, args));
+            alert.showAndWait();
+        });
     }
 }

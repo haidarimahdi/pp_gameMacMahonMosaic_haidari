@@ -3,6 +3,7 @@ package gui;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.stage.Stage;
 
 import java.io.IOException;
@@ -28,6 +29,16 @@ public class ApplicationMain extends Application {
         stage.setTitle("MacMahon Mosaic!!!");
         stage.setScene(scene);
         stage.show();
+
+        // 1. statement in Application.start():
+        // Exit the application if an exception has not been caught.
+        Thread.currentThread().setUncaughtExceptionHandler((Thread th, Throwable ex)-> {
+            ex.printStackTrace();
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Unexpected Exception");
+            alert.setContentText("Sorry, that should not be happening!");
+            alert.showAndWait();
+        });
     }
 
     /**
